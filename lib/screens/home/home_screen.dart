@@ -46,37 +46,28 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Row(
               children: [
-                Container(
+                SizedBox(
                   width: 36,
                   height: 36,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    gradient: const LinearGradient(
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
                       colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    child: const Icon(
+                      Icons.sports_soccer,
+                      size: 32,
+                      color: Colors.white,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.orange.withOpacity(0.3),
-                        blurRadius: 12,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.sports_volleyball,
-                    color: Colors.white,
-                    size: 20,
                   ),
                 ),
                 const SizedBox(width: 10),
                 const Text(
                   'SPORTSET',
                   style: TextStyle(
-                    color: Color(0xFF1A237E),
+                    color: Color(0xFF0F172A),
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
+                    letterSpacing: 2.2,
                   ),
                 ),
               ],

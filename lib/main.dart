@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Intro screen
+import 'screens/intro/intro_screen.dart';
 
 // Auth screens
 import 'screens/auth/login_screen.dart';
@@ -56,8 +60,14 @@ class SportsetApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Lexend',
       ),
-      initialRoute: '/login',
+      initialRoute: '/',
       routes: {
+        // Initial route - check if intro was completed
+        '/': (context) => const SplashScreen(),
+        
+        // Intro route
+        '/intro': (context) => const IntroScreen(),
+        
         // Auth routes
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
@@ -185,6 +195,94 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Splash screen to check if intro was completed
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkIntroStatus();
+  }
+
+  Future<void> _checkIntroStatus() async {
+    // Wait a moment to show splash
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    final prefs = await SharedPreferences.getInstance();
+    final introCompleted = prefs.getBool('intro_completed') ?? false;
+    
+    if (mounted) {
+      if (introCompleted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      } else {
+        Navigator.pushReplacementNamed(context, '/intro');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFF9800),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFFF9800),
+                    Color(0xFFF44336),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.sports_soccer,
+                size: 70,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'SPORTSET',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 48),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              strokeWidth: 3,
+            ),
+          ],
+        ),
       ),
     );
   }
