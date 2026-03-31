@@ -1,3 +1,4 @@
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
@@ -10,113 +11,11 @@ class BookingHistoryScreen extends StatefulWidget {
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   int _selectedTab = 0; // 0: Sắp tới, 1: Lịch sử
 
-  final List<Map<String, dynamic>> _upcomingBookings = [
-    {
-      'id': '1',
-      'name': 'Sân bóng Chảo Lửa',
-      'image': 'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-      'time': '18:00 - 19:30',
-      'date': '22/11/2023',
-      'status': 'Đã xác nhận',
-    },
-    {
-      'id': '2',
-      'name': 'Sân cầu lông Bình Thới',
-      'image': 'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-      'time': '19:30 - 21:00',
-      'date': '24/11/2023',
-      'status': 'Đã xác nhận',
-    },
-    {
-      'id': '3',
-      'name': 'Sân Tennis Lan Anh',
-      'image': 'https://img.meta.com.vn/Data/image/2021/03/15/kich-thuoc-san-tennis-7.jpg',
-      'time': '08:00 - 10:00',
-      'date': '26/11/2023',
-      'status': 'Đã xác nhận',
-    },
-    {
-      'id': '4',
-      'name': 'Sân rổ P.Đình Phùng',
-      'image': 'https://th.bing.com/th/id/R.e8161a12d899f85d1b06980a2ae105fa?rik=qptbfe%2bJ%2beMk2Q&pid=ImgRaw&r=0',
-      'time': '17:00 - 19:00',
-      'date': '28/11/2023',
-      'status': 'Đã xác nhận',
-    },
-    {
-      'id': '9',
-      'name': 'Sân bóng Thiên Long',
-      'image': 'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-      'time': '20:00 - 21:30',
-      'date': '29/11/2023',
-      'status': 'Đã xác nhận',
-    },
-    {
-      'id': '10',
-      'name': 'Sân bơi Aqua Park',
-      'image': 'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-      'time': '15:00 - 17:00',
-      'date': '30/11/2023',
-      'status': 'Đã xác nhận',
-    },
-  ];
-
-  final List<Map<String, dynamic>> _historyBookings = [
-    {
-      'id': '5',
-      'name': 'Sân bóng Chảo Lửa',
-      'image': 'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-      'time': '18:00 - 19:30',
-      'date': '15/11/2023',
-      'status': 'Đã hoàn thành',
-      'hasReview': false,
-    },
-    {
-      'id': '6',
-      'name': 'Sân cầu lông Bình Thới',
-      'image': 'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-      'time': '19:30 - 21:00',
-      'date': '12/11/2023',
-      'status': 'Đã hoàn thành',
-      'hasReview': true,
-    },
-    {
-      'id': '7',
-      'name': 'Sân Tennis Lan Anh',
-      'image': 'https://img.meta.com.vn/Data/image/2021/03/15/kich-thuoc-san-tennis-7.jpg',
-      'time': '08:00 - 10:00',
-      'date': '10/11/2023',
-      'status': 'Đã hủy',
-      'hasReview': false,
-    },
-    {
-      'id': '8',
-      'name': 'Sân rổ P.Đình Phùng',
-      'image': 'https://th.bing.com/th/id/R.e8161a12d899f85d1b06980a2ae105fa?rik=qptbfe%2bJ%2beMk2Q&pid=ImgRaw&r=0',
-      'time': '17:00 - 19:00',
-      'date': '05/11/2023',
-      'status': 'Đã hoàn thành',
-      'hasReview': false,
-    },
-    {
-      'id': '11',
-      'name': 'Sân bóng Thiên Long',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCX7Lh_IQkAB7irHwXOjGqcucR3-ziF5MGIKeOKwlN5CqQeA3M1FS7ePwCExMmueE6gohRnfnmdOWYWWMMumiIo9VXVdhJccNGDShWMdkTjRi90WYVxPFStYe2UxWD9kqiGbAFv7XOIPfU1t5rtEmj4jYvQ0vYWxiF6sHLNeTShjIXnVPdINu6J--dgqmZeQA_NvMhPewhLCrbpaAWZj6NJYwQcyXaMHhLnG6vBTdQFQei42MUoZG4nF5kTr27ccRO6K2ZE65AONmaC',
-      'time': '20:00 - 21:30',
-      'date': '03/11/2023',
-      'status': 'Đã hoàn thành',
-      'hasReview': true,
-    },
-    {
-      'id': '12',
-      'name': 'Sân bơi Aqua Park',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBfH7HLUrf9SuNdxlN879jRfj5C85jXz7pRZmTFSjKa6TE5y6LkIHl_s5Us2AO8iv8pG8p1OMyNE2JGmobPsIthjYD_yQ4EL7iMJT9Zw_u2tIa05eapXqy9s--WoooraHsutYQAn0A-UNEn0RFQ8qV0SzwumPYUuUN3uKjiVbK0mJsfE27Og6DWlxMUTTq5NxjWRRzG5nrrumJlzFMubsEixbkQT4n6t3d0HJA8SwJkLWp5D87Ft4Pf0mFv4ukfg3y3mTIn3E1H74W',
-      'time': '15:00 - 17:00',
-      'date': '01/11/2023',
-      'status': 'Đã hoàn thành',
-      'hasReview': false,
-    },
-  ];
+  final Stream<QuerySnapshot<Map<String, dynamic>>> _bookingsStream =
+      FirebaseFirestore.instance
+          .collection('bookings')
+          .orderBy('createdAt', descending: true)
+          .snapshots();
 
   @override
   Widget build(BuildContext context) {
@@ -126,30 +25,242 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
         children: [
           _buildHeader(),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 16,
-                bottom: 0,
-              ),
-              itemCount: _selectedTab == 0
-                  ? _upcomingBookings.length
-                  : _historyBookings.length,
-              itemBuilder: (context, index) {
-                final booking = _selectedTab == 0
-                    ? _upcomingBookings[index]
-                    : _historyBookings[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _selectedTab == 0
-                      ? _buildUpcomingBookingCard(booking)
-                      : _buildHistoryBookingCard(booking),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _bookingsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFFFF9800),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'Không tải được lịch đặt. Vui lòng thử lại sau.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.red.shade400,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                final bookings = (snapshot.data?.docs ?? [])
+                    .map(_mapBooking)
+                    .toList();
+
+                final upcomingBookings = bookings
+                    .where(_isUpcomingBooking)
+                    .toList();
+                final historyBookings = bookings
+                    .where((booking) => !_isUpcomingBooking(booking))
+                    .toList();
+
+                final tabBookings = _selectedTab == 0
+                    ? upcomingBookings
+                    : historyBookings;
+
+                if (tabBookings.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom: 0,
+                  ),
+                  itemCount: tabBookings.length,
+                  itemBuilder: (context, index) {
+                    final booking = tabBookings[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _selectedTab == 0
+                          ? _buildUpcomingBookingCard(booking)
+                          : _buildHistoryBookingCard(booking),
+                    );
+                  },
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Map<String, dynamic> _mapBooking(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    final selectedDateRaw = data['selectedDate'];
+    final selectedSlotRaw = data['selectedSlot'];
+    final selectedDate = selectedDateRaw is Map
+        ? Map<String, dynamic>.from(selectedDateRaw)
+        : <String, dynamic>{};
+    final selectedSlot = selectedSlotRaw is Map
+        ? Map<String, dynamic>.from(selectedSlotRaw)
+        : <String, dynamic>{};
+
+    final dateTime = _extractDateTime(selectedDate['dateTime']);
+    final statusRaw = _normalizeStatus((data['status'] ?? '').toString());
+
+    return {
+      'id': doc.id,
+      'name': (data['courtName'] ?? 'Sân thể thao').toString(),
+      'image': (data['courtImageUrl'] ?? '').toString(),
+      'sportType': (data['sportType'] ?? '').toString(),
+      'selectedDate': selectedDate,
+      'selectedSlot': selectedSlot,
+      'subCourtName': (data['subCourtName'] ?? '').toString(),
+      'duration': (data['duration'] ?? '').toString(),
+      'paymentMethodLabel': (data['paymentMethodLabel'] ?? 'Chưa chọn').toString(),
+      'time': _buildTimeText(selectedSlot),
+      'date': _buildDateText(selectedDate, dateTime),
+      'dateTime': dateTime,
+      'statusRaw': statusRaw,
+      'status': _statusLabel(statusRaw),
+      'paymentStatus': (data['paymentStatus'] ?? 'pending').toString(),
+      'totalPrice': _toInt(data['totalPrice']),
+      'hasReview': data['hasReview'] == true,
+    };
+  }
+
+  DateTime? _extractDateTime(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    return null;
+  }
+
+  String _buildDateText(Map<String, dynamic> selectedDate, DateTime? dateTime) {
+    final day = (selectedDate['day'] ?? '').toString();
+    final date = (selectedDate['date'] ?? '').toString();
+    final month = (selectedDate['month'] ?? '').toString();
+
+    if (day.isNotEmpty && date.isNotEmpty && month.isNotEmpty) {
+      return '$day, $date/$month';
+    }
+    if (date.isNotEmpty && month.isNotEmpty) {
+      return '$date/$month';
+    }
+
+    if (dateTime != null) {
+      final dd = dateTime.day.toString().padLeft(2, '0');
+      final mm = dateTime.month.toString().padLeft(2, '0');
+      final yyyy = dateTime.year.toString();
+      return '$dd/$mm/$yyyy';
+    }
+
+    return 'Chưa có ngày';
+  }
+
+  String _buildTimeText(Map<String, dynamic> selectedSlot) {
+    final start = (selectedSlot['startTime'] ?? '').toString();
+    final end = (selectedSlot['endTime'] ?? '').toString();
+
+    if (start.isNotEmpty && end.isNotEmpty) {
+      return '$start - $end';
+    }
+    if (start.isNotEmpty) {
+      return start;
+    }
+
+    return 'Chưa có khung giờ';
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is double) {
+      return value.round();
+    }
+    return 0;
+  }
+
+  String _normalizeStatus(String status) => status.trim().toLowerCase();
+
+  bool _isUpcomingBooking(Map<String, dynamic> booking) {
+    final status = (booking['statusRaw'] ?? '').toString();
+    if (status == 'cancelled' || status == 'completed') {
+      return false;
+    }
+
+    final playDateTime = booking['dateTime'] as DateTime?;
+    if (playDateTime == null) {
+      return false;
+    }
+
+    return playDateTime.isAfter(DateTime.now());
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'confirmed':
+        return 'Đã xác nhận';
+      case 'cancelled':
+        return 'Đã hủy';
+      case 'completed':
+        return 'Đã hoàn thành';
+      case 'pending':
+        return 'Đang chờ';
+      default:
+        return status.isEmpty ? 'Không xác định' : status;
+    }
+  }
+
+  String _formatMoney(int amount) {
+    final raw = amount.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < raw.length; i++) {
+      final reverseIndex = raw.length - i;
+      buffer.write(raw[i]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        buffer.write('.');
+      }
+    }
+    return '${buffer.toString()}đ';
+  }
+
+  Widget _buildEmptyState() {
+    final title = _selectedTab == 0
+        ? 'Chưa có lịch đặt sắp tới'
+        : 'Chưa có lịch sử đặt sân';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.event_busy_rounded,
+              size: 52,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -261,9 +372,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     );
   }
 
-
-
   Widget _buildUpcomingBookingCard(Map<String, dynamic> booking) {
+    final statusRaw = (booking['statusRaw'] ?? '').toString();
+    final isPending = statusRaw == 'pending';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -283,10 +395,17 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Image.network(
-              booking['image'],
+              booking['image'] ?? '',
               width: 96,
               height: 96,
               fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 96,
+                height: 96,
+                color: Colors.grey.shade200,
+                alignment: Alignment.center,
+                child: const Icon(Icons.image_not_supported_rounded, color: Colors.grey),
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -299,7 +418,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        booking['name'],
+                        (booking['name'] ?? '').toString(),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -310,24 +429,25 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                        color: isPending
+                            ? const Color(0xFFFF9800).withValues(alpha: 0.12)
+                            : const Color(0xFF4CAF50).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
+                          color: isPending
+                              ? const Color(0xFFFF9800).withValues(alpha: 0.2)
+                              : const Color(0xFF4CAF50).withValues(alpha: 0.2),
                           width: 1,
                         ),
                       ),
-                      child: const Text(
-                        'Đã xác nhận',
+                      child: Text(
+                        (booking['status'] ?? 'Đã xác nhận').toString(),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF4CAF50),
+                          color: isPending ? const Color(0xFFFF9800) : const Color(0xFF4CAF50),
                         ),
                       ),
                     ),
@@ -336,14 +456,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.schedule,
-                      size: 14,
-                      color: Colors.grey,
-                    ),
+                    const Icon(Icons.schedule, size: 14, color: Colors.grey),
                     const SizedBox(width: 6),
                     Text(
-                      booking['time'],
+                      (booking['time'] ?? '').toString(),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
@@ -355,14 +471,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.calendar_month,
-                      size: 14,
-                      color: Colors.grey,
-                    ),
+                    const Icon(Icons.calendar_month, size: 14, color: Colors.grey),
                     const SizedBox(width: 6),
                     Text(
-                      booking['date'],
+                      (booking['date'] ?? '').toString(),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
@@ -372,17 +484,56 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
+                Text(
+                  '${_formatMoney(_toInt(booking['totalPrice']))} • ${(booking['paymentStatus'] ?? 'pending').toString().toUpperCase()}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A237E),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
                   child: GestureDetector(
                     onTap: () {
-                      Navigator.pushNamed(context, '/booking-success');
+                      final selectedDate =
+                          (booking['selectedDate'] is Map)
+                              ? Map<String, dynamic>.from(
+                                  booking['selectedDate'] as Map,
+                                )
+                              : <String, dynamic>{};
+
+                      final selectedSlot =
+                          (booking['selectedSlot'] is Map)
+                              ? Map<String, dynamic>.from(
+                                  booking['selectedSlot'] as Map,
+                                )
+                              : <String, dynamic>{};
+
+                      Navigator.pushNamed(
+                        context,
+                        '/booking-success',
+                        arguments: {
+                          'bookingId': (booking['id'] ?? '').toString(),
+                          'court': {
+                            'name': (booking['name'] ?? '').toString(),
+                            'sportType': (booking['sportType'] ?? '').toString(),
+                          },
+                          'selectedDate': selectedDate,
+                          'selectedSlot': selectedSlot,
+                          'selectedSubCourt':
+                              (booking['subCourtName'] ?? '').toString(),
+                          'duration': (booking['duration'] ?? '').toString(),
+                          'totalPrice': _toInt(booking['totalPrice']),
+                          'paymentMethodLabel':
+                              (booking['paymentMethodLabel'] ?? 'Chưa chọn')
+                                  .toString(),
+                        },
+                      );
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFFFF9800), Color(0xFFF44336)],
@@ -418,8 +569,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   }
 
   Widget _buildHistoryBookingCard(Map<String, dynamic> booking) {
-    final isCancelled = booking['status'] == 'Đã hủy';
-    final hasReview = booking['hasReview'] as bool;
+    final isCancelled = (booking['statusRaw'] ?? '').toString() == 'cancelled';
+    final hasReview = booking['hasReview'] == true;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -452,10 +603,17 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                         BlendMode.multiply,
                       ),
                 child: Image.network(
-                  booking['image'],
+                  booking['image'] ?? '',
                   width: 96,
                   height: 96,
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 96,
+                    height: 96,
+                    color: Colors.grey.shade200,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.image_not_supported_rounded, color: Colors.grey),
+                  ),
                 ),
               ),
             ),
@@ -469,7 +627,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          booking['name'],
+                          (booking['name'] ?? '').toString(),
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -480,10 +638,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: isCancelled
                               ? const Color(0xFFF44336).withValues(alpha: 0.1)
@@ -497,13 +652,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                           ),
                         ),
                         child: Text(
-                          booking['status'],
+                          (booking['status'] ?? '').toString(),
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: isCancelled
-                                ? const Color(0xFFF44336)
-                                : const Color(0xFF4CAF50),
+                            color: isCancelled ? const Color(0xFFF44336) : const Color(0xFF4CAF50),
                           ),
                         ),
                       ),
@@ -519,7 +672,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        booking['time'],
+                        (booking['time'] ?? '').toString(),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -538,7 +691,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        booking['date'],
+                        (booking['date'] ?? '').toString(),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -548,6 +701,15 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  Text(
+                    '${_formatMoney(_toInt(booking['totalPrice']))} • ${(booking['paymentStatus'] ?? 'pending').toString().toUpperCase()}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isCancelled ? Colors.grey[400] : const Color(0xFF1A237E),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
@@ -566,10 +728,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [Color(0xFFFF9800), Color(0xFFF44336)],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -8,29 +9,191 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String _normalizeText(String? value) {
+    return (value ?? '').trim().toLowerCase();
+  }
+
+  double _toDouble(dynamic value, {double fallback = 0}) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  String _toPrice(dynamic value) {
+    if (value is num) {
+      if (value >= 1000) {
+        return '${(value / 1000).round()}K/H';
+      }
+      return '${value.round()}/H';
+    }
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? 'Liên hệ' : text;
+  }
+
+  Map<String, dynamic> _courtFromFirestore(
+    Map<String, dynamic> data, {
+    required String docId,
+  }) {
+    final detailData = Map<String, dynamic>.from(data);
+    detailData['id'] = docId;
+    return {
+      'id': docId,
+      'name': data['name'] ?? 'Chưa có tên sân',
+      'address': data['address'] ?? 'Chưa cập nhật địa chỉ',
+      'rating': _toDouble(data['rating'], fallback: 0),
+      'distance': data['distance']?.toString() ?? '-- km',
+      'price': _toPrice(data['pricePerHour'] ?? data['price']),
+      'image':
+          data['imageUrl'] ??
+          data['image'] ??
+          'https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80',
+      'category': data['sportType']?.toString() ?? '',
+      'status': data['status']?.toString() ?? '',
+      'detailData': detailData,
+    };
+  }
+
+  List<String> _buildVisibleSports(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final sports = <String>[];
+    for (final doc in docs) {
+      final data = doc.data();
+      if (data['isVisible'] != true) {
+        continue;
+      }
+      final name = data['name']?.toString().trim() ?? '';
+      if (name.isNotEmpty && !sports.contains(name)) {
+        sports.add(name);
+      }
+    }
+    return sports;
+  }
+
+  Map<String, List<Map<String, dynamic>>> _buildSuggestedByCategory({
+    required List<String> categories,
+    required List<Map<String, dynamic>> courts,
+  }) {
+    final normalizedCategories = {
+      for (final category in categories) _normalizeText(category): category,
+    };
+
+    final grouped = <String, List<Map<String, dynamic>>>{
+      for (final category in categories) category: <Map<String, dynamic>>[],
+    };
+
+    for (final court in courts) {
+      final key = _normalizeText(court['category']?.toString());
+      final category = normalizedCategories[key];
+      if (category != null) {
+        grouped[category]!.add(court);
+      }
+    }
+
+    for (final entry in grouped.entries) {
+      entry.value.sort((a, b) {
+        final left = (a['rating'] as num?)?.toDouble() ?? 0;
+        final right = (b['rating'] as num?)?.toDouble() ?? 0;
+        return right.compareTo(left);
+      });
+      if (entry.value.length > 10) {
+        entry.value.removeRange(10, entry.value.length);
+      }
+    }
+
+    return grouped;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F6),
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('sports')
+            .where('isVisible', isEqualTo: true)
+            .snapshots(),
+        builder: (context, sportsSnapshot) {
+          if (sportsSnapshot.connectionState == ConnectionState.waiting &&
+              !sportsSnapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (sportsSnapshot.hasError) {
+            return const Center(
+              child: Text('Không thể tải danh mục từ Firebase'),
+            );
+          }
+
+          final categories = _buildVisibleSports(sportsSnapshot.data?.docs ?? []);
+          if (categories.isEmpty) {
+            return const Center(
+              child: Text('Chưa có danh mục thể thao đang hiển thị'),
+            );
+          }
+
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance.collection('courts').snapshots(),
+            builder: (context, courtsSnapshot) {
+              if (courtsSnapshot.connectionState == ConnectionState.waiting &&
+                  !courtsSnapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (courtsSnapshot.hasError) {
+                return const Center(
+                  child: Text('Không thể tải dữ liệu sân từ Firebase'),
+                );
+              }
+
+              final courts = (courtsSnapshot.data?.docs ?? [])
+                  .map((doc) => _courtFromFirestore(doc.data(), docId: doc.id))
+                  .where((court) {
+                    final status = (court['status'] ?? '').toString();
+                    return status.isEmpty || status == 'available';
+                  })
+                  .toList();
+              final suggestedByCategory = _buildSuggestedByCategory(
+                categories: categories,
+                courts: courts,
+              );
+
+              final visibleSections = categories
+                  .where((category) =>
+                      (suggestedByCategory[category] ?? <Map<String, dynamic>>[])
+                          .isNotEmpty)
+                  .toList();
+
+              return Column(
                 children: [
-                  _buildSearchBar(),
-                  _buildBanner(),
-                  _buildFieldSection('SÂN BÓNG ĐÁ GỢI Ý', _footballFields),
-                  _buildFieldSection('SÂN CẦU LÔNG GỢI Ý', _badmintonFields),
-                  _buildFieldSection('SÂN TENNIS GỢI Ý', _tennisFields),
-                  _buildFieldSection('SÂN BÓNG RỔ GỢI Ý', _basketballFields),
-                  const SizedBox(height: 12),
+                  _buildHeader(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          _buildSearchBar(),
+                          _buildBanner(),
+                          if (visibleSections.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Text('Chưa có sân phù hợp với danh mục'),
+                            ),
+                          for (final category in visibleSections)
+                            _buildFieldSection(
+                              category,
+                              suggestedByCategory[category] ??
+                                  <Map<String, dynamic>>[],
+                            ),
+                          const SizedBox(height: 12),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
-              ),
-            ),
-          ),
-        ],
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -107,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 4,
                       ),
                     ],
@@ -144,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
           border: Border.all(color: Colors.grey.shade50),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
@@ -185,7 +348,10 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(color: Colors.orange.withOpacity(0.15), blurRadius: 12),
+            BoxShadow(
+              color: Colors.orange.withValues(alpha: 0.15),
+              blurRadius: 12,
+            ),
           ],
         ),
         child: ClipRRect(
@@ -273,7 +439,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFieldSection(String title, List<Map<String, dynamic>> fields) {
+  Widget _buildFieldSection(String category, List<Map<String, dynamic>> fields) {
+    final title = 'SÂN ${category.toUpperCase()} GỢI Ý';
     return Column(
       children: [
         Padding(
@@ -330,7 +497,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFieldCard(Map<String, dynamic> field) {
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, '/field-detail');
+        Navigator.pushNamed(
+          context,
+          '/field-detail',
+          arguments: {'court': field['detailData'] ?? field},
+        );
       },
       child: Container(
         width: 260,
@@ -341,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
           border: Border.all(color: Colors.grey.shade100),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -379,11 +550,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(8),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
+                          color: Colors.black.withValues(alpha: 0.08),
                           blurRadius: 4,
                         ),
                       ],
@@ -489,133 +660,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Data
-  final List<Map<String, dynamic>> _footballFields = [
-    {
-      'name': 'Sân bóng Chảo Lửa',
-      'address': '30 Phan Thúc Duyện, Tân Bình',
-      'rating': 4.8,
-      'distance': '1.2 km',
-      'price': '300K/H',
-      'image':
-          'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-    },
-    {
-      'name': 'Sân bóng Thành Đồng',
-      'address': '19 Sầm Sơn, Tân Bình',
-      'rating': 4.7,
-      'distance': '2.5 km',
-      'price': '280K/H',
-      'image':
-          'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-    },
-    {
-      'name': 'Sân mini Tao Đàn',
-      'address': '1 Huyền Trân Công Chúa, Q.1',
-      'rating': 4.5,
-      'distance': '0.8 km',
-      'price': '350K/H',
-      'image':
-          'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-    },
-    {
-      'name': 'Sân cỏ nhân tạo D36',
-      'address': '36 Hoàng Hoa Thám, Tân Bình',
-      'rating': 4.9,
-      'distance': '3.1 km',
-      'price': '320K/H',
-      'image':
-          'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-    },
-  ];
-
-  final List<Map<String, dynamic>> _badmintonFields = [
-    {
-      'name': 'Sân cầu lông Bình Thới',
-      'address': '220 Lãnh Binh Thăng, Q.11',
-      'rating': 4.9,
-      'distance': '1.5 km',
-      'price': '120K/H',
-      'image':
-          'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-    },
-    {
-      'name': 'Sân cầu lông Thống Nhất',
-      'address': '138 Đào Duy Từ, Q.10',
-      'rating': 4.7,
-      'distance': '2.2 km',
-      'price': '150K/H',
-      'image':
-          'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-    },
-    {
-      'name': 'Sân cầu lông Hải Yến',
-      'address': '151/1 Nguyễn Trãi, Q.5',
-      'rating': 4.6,
-      'distance': '1.8 km',
-      'price': '100K/H',
-      'image':
-          'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-    },
-  ];
-
-  final List<Map<String, dynamic>> _tennisFields = [
-    {
-      'name': 'Sân Tennis Lan Anh',
-      'address': '291 Cách Mạng Tháng 8, Q.10',
-      'rating': 4.8,
-      'distance': '1.5 km',
-      'price': '550K/H',
-      'image':
-          'https://img.meta.com.vn/Data/image/2021/03/15/kich-thuoc-san-tennis-7.jpg',
-    },
-    {
-      'name': 'Sân Tennis Kỳ Hòa',
-      'address': '238 Ba Tháng Hai, Q.10',
-      'rating': 4.7,
-      'distance': '2.8 km',
-      'price': '480K/H',
-      'image':
-          'https://img.meta.com.vn/Data/image/2021/03/15/kich-thuoc-san-tennis-7.jpg',
-    },
-    {
-      'name': 'Sân Tennis Phú Thọ',
-      'address': '215A Lý Thường Kiệt, Q.11',
-      'rating': 4.6,
-      'distance': '3.2 km',
-      'price': '500K/H',
-      'image':
-          'https://img.meta.com.vn/Data/image/2021/03/15/kich-thuoc-san-tennis-7.jpg',
-    },
-  ];
-
-  final List<Map<String, dynamic>> _basketballFields = [
-    {
-      'name': 'Sân rổ Phan Đình Phùng',
-      'address': '8 Võ Văn Tần, Q.3',
-      'rating': 4.7,
-      'distance': '0.8 km',
-      'price': '250K/H',
-      'image':
-          'https://th.bing.com/th/id/R.e8161a12d899f85d1b06980a2ae105fa?rik=qptbfe%2bJ%2beMk2Q&pid=ImgRaw&r=0',
-    },
-    {
-      'name': 'NTĐ Hồ Xuân Hương',
-      'address': '2 Hồ Xuân Hương, Q.3',
-      'rating': 4.6,
-      'distance': '1.7 km',
-      'price': '200K/H',
-      'image':
-          'https://th.bing.com/th/id/R.e8161a12d899f85d1b06980a2ae105fa?rik=qptbfe%2bJ%2beMk2Q&pid=ImgRaw&r=0',
-    },
-    {
-      'name': 'Nhà thi đấu Phú Thọ',
-      'address': '219 Lý Thường Kiệt, Q.11',
-      'rating': 4.8,
-      'distance': '0.6 km',
-      'price': '300K/H',
-      'image':
-          'https://th.bing.com/th/id/R.e8161a12d899f85d1b06980a2ae105fa?rik=qptbfe%2bJ%2beMk2Q&pid=ImgRaw&r=0',
-    },
-  ];
 }

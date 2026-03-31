@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
   const BookingConfirmationScreen({super.key});
@@ -10,6 +11,349 @@ class BookingConfirmationScreen extends StatefulWidget {
 
 class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   String _selectedPayment = 'momo';
+  bool _isSubmitting = false;
+  bool _didInitFromArgs = false;
+  Map<String, dynamic> _court = {};
+  Map<String, dynamic>? _selectedDate;
+  Map<String, dynamic>? _selectedSlot;
+  String? _selectedSubCourt;
+  String _duration = '1 tiếng 30 phút';
+  int _totalPrice = 0;
+  Map<String, dynamic>? _selectedVoucher;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitFromArgs) {
+      return;
+    }
+    _didInitFromArgs = true;
+
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args == null) {
+      return;
+    }
+
+    final incomingCourt = args['court'];
+    if (incomingCourt is Map) {
+      _court = Map<String, dynamic>.from(incomingCourt);
+    }
+
+    final incomingDate = args['selectedDate'];
+    if (incomingDate is Map) {
+      _selectedDate = Map<String, dynamic>.from(incomingDate);
+    }
+
+    final incomingSlot = args['selectedSlot'];
+    if (incomingSlot is Map) {
+      _selectedSlot = Map<String, dynamic>.from(incomingSlot);
+    }
+
+    _selectedSubCourt = args['selectedSubCourt']?.toString();
+    _duration = args['duration']?.toString() ?? _duration;
+    _totalPrice = _toInt(args['totalPrice']);
+  }
+
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value) ?? fallback;
+    }
+    return fallback;
+  }
+
+  String _formatCurrency(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      final reverseIndex = digits.length - i;
+      buffer.write(digits[i]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        buffer.write('.');
+      }
+    }
+    return '${buffer.toString()}đ';
+  }
+
+  String _bookingTimeLabel() {
+    final slot = _selectedSlot;
+    final selectedDate = _selectedDate;
+    if (slot == null || selectedDate == null) {
+      return 'Chưa chọn lịch';
+    }
+
+    final start = slot['startTime']?.toString() ?? '';
+    final end = slot['endTime']?.toString() ?? '';
+    final day = selectedDate['day']?.toString() ?? '';
+    final date = selectedDate['date']?.toString() ?? '';
+    final month = selectedDate['month']?.toString() ?? '';
+
+    if (start.isEmpty || end.isEmpty || day.isEmpty || date.isEmpty || month.isEmpty) {
+      return 'Chưa chọn lịch';
+    }
+    return '$start - $end | $day, $date/$month';
+  }
+
+  String _subCourtLabel() {
+    final subCourtName = _selectedSubCourt;
+    if (subCourtName == null || subCourtName.trim().isEmpty) {
+      return 'Sân tiêu chuẩn';
+    }
+    return subCourtName;
+  }
+
+  String _courtName() {
+    return _court['name']?.toString() ?? 'Sân thể thao';
+  }
+
+  String _courtAddress() {
+    return _court['address']?.toString() ?? 'Chưa có địa chỉ';
+  }
+
+  String _courtImage() {
+    final imageUrl = _court['imageUrl']?.toString() ?? '';
+    if (imageUrl.isNotEmpty) {
+      return imageUrl;
+    }
+    return 'https://htsport.vn/wp-content/uploads/2019/12/25-kich-thuoc-san-bong-7-nguoi-2.jpg';
+  }
+
+  String _courtId() {
+    return _court['id']?.toString() ?? _court['docId']?.toString() ?? '';
+  }
+
+  String _paymentMethodLabel() {
+    switch (_selectedPayment) {
+      case 'momo':
+        return 'MoMo';
+      case 'zalopay':
+        return 'ZaloPay';
+      case 'vnpay':
+        return 'VNPAY';
+      case 'banking':
+        return 'ATM/Internet Banking';
+      default:
+        return _selectedPayment;
+    }
+  }
+
+  int _voucherDiscountAmount() {
+    final voucher = _selectedVoucher;
+    if (voucher == null) {
+      return 0;
+    }
+
+    final minOrderValue = _toInt(voucher['minOrderValue']);
+    if (_totalPrice < minOrderValue) {
+      return 0;
+    }
+
+    final discountType = voucher['discountType']?.toString().toLowerCase() ?? '';
+    final discountValue = (voucher['discountValue'] as num?)?.toDouble() ?? 0;
+
+    if (discountType == 'percent') {
+      final amount = (_totalPrice * discountValue / 100).round();
+      return amount.clamp(0, _totalPrice);
+    }
+
+    return discountValue.round().clamp(0, _totalPrice);
+  }
+
+  int _finalPayableAmount() {
+    return (_totalPrice - _voucherDiscountAmount()).clamp(0, _totalPrice);
+  }
+
+  String _voucherTitle() {
+    final voucher = _selectedVoucher;
+    if (voucher == null) {
+      return 'Chọn voucher';
+    }
+    final title = voucher['title']?.toString() ?? '';
+    final code = voucher['code']?.toString() ?? '';
+    if (title.isNotEmpty) {
+      return title;
+    }
+    if (code.isNotEmpty) {
+      return code;
+    }
+    return 'Voucher đã chọn';
+  }
+
+  String _voucherSubtitle() {
+    final voucher = _selectedVoucher;
+    if (voucher == null) {
+      return '';
+    }
+    final code = voucher['code']?.toString() ?? '';
+    final discountType = voucher['discountType']?.toString().toLowerCase() ?? '';
+    final discountValue = (voucher['discountValue'] as num?)?.toDouble() ?? 0;
+    final discountText = discountType == 'percent'
+        ? 'Giảm ${discountValue.toStringAsFixed(discountValue % 1 == 0 ? 0 : 1)}%'
+        : 'Giảm ${_formatCurrency(discountValue.round())}';
+    if (code.isEmpty) {
+      return discountText;
+    }
+    return '$code • $discountText';
+  }
+
+  Future<void> _openVoucherSelection() async {
+    final result = await Navigator.pushNamed(
+      context,
+      '/voucher-selection',
+      arguments: {
+        'facilityId': _court['facilityId']?.toString() ?? '',
+        'orderValue': _totalPrice,
+        'selectedVoucherId': _selectedVoucher?['id']?.toString(),
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result is Map) {
+      setState(() {
+        _selectedVoucher = Map<String, dynamic>.from(result);
+      });
+      return;
+    }
+
+    if (result == null) {
+      return;
+    }
+  }
+
+  Future<void> _submitBooking() async {
+    if (_isSubmitting) {
+      return;
+    }
+
+    final selectedDate = _selectedDate;
+    final selectedSlot = _selectedSlot;
+    final courtId = _courtId();
+
+    if (selectedDate == null || selectedSlot == null || courtId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thiếu dữ liệu đặt sân. Vui lòng thử lại.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    final discountAmount = _voucherDiscountAmount();
+    final finalPayable = _finalPayableAmount();
+
+    final bookingPayload = <String, dynamic>{
+      'courtId': courtId,
+      'courtName': _courtName(),
+      'courtAddress': _courtAddress(),
+      'courtImageUrl': _courtImage(),
+      'facilityId': _court['facilityId']?.toString() ?? '',
+      'facilityName': _court['facilityName']?.toString() ?? '',
+      'sportType': _court['sportType']?.toString() ?? '',
+      'subCourtName': _subCourtLabel(),
+      'selectedDate': selectedDate,
+      'selectedSlot': selectedSlot,
+      'duration': _duration,
+      'slotPrice': _toInt(selectedSlot['price']),
+      'basePrice': _totalPrice,
+      'discountAmount': discountAmount,
+      'totalPrice': finalPayable,
+      'voucherId': _selectedVoucher?['id']?.toString() ?? '',
+      'voucherCode': _selectedVoucher?['code']?.toString() ?? '',
+      'voucherTitle': _selectedVoucher?['title']?.toString() ?? '',
+      'paymentMethod': _selectedPayment,
+      'paymentMethodLabel': _paymentMethodLabel(),
+      'status': 'confirmed',
+      'paymentStatus': 'paid',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final bookingRef = firestore.collection('bookings').doc();
+      final selectedVoucherId = _selectedVoucher?['id']?.toString() ?? '';
+
+      await firestore.runTransaction((transaction) async {
+        if (selectedVoucherId.isNotEmpty) {
+          final voucherRef = firestore.collection('vouchers').doc(selectedVoucherId);
+          final voucherSnapshot = await transaction.get(voucherRef);
+
+          if (!voucherSnapshot.exists) {
+            throw Exception('voucher_not_found');
+          }
+
+          final voucherData = voucherSnapshot.data() ?? <String, dynamic>{};
+          final totalQuantity = _toInt(voucherData['totalQuantity']);
+          final usedQuantity = _toInt(voucherData['usedQuantity']);
+
+          if (totalQuantity <= 0) {
+            throw Exception('voucher_out_of_quantity');
+          }
+
+          transaction.update(voucherRef, {
+            'totalQuantity': totalQuantity - 1,
+            'usedQuantity': usedQuantity + 1,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        transaction.set(bookingRef, bookingPayload);
+      });
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushReplacementNamed(
+        context,
+        '/booking-success',
+        arguments: {
+          'bookingId': bookingRef.id,
+          'court': _court,
+          'selectedDate': selectedDate,
+          'selectedSlot': selectedSlot,
+          'selectedSubCourt': _selectedSubCourt,
+          'duration': _duration,
+          'basePrice': _totalPrice,
+          'discountAmount': discountAmount,
+          'totalPrice': finalPayable,
+          'selectedVoucher': _selectedVoucher,
+          'paymentMethod': _selectedPayment,
+          'paymentMethodLabel': _paymentMethodLabel(),
+        },
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể tạo đơn đặt sân. Vui lòng thử lại.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,11 +361,10 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       backgroundColor: const Color(0xFFFFF8F6),
       body: Stack(
         children: [
-          // Main content with padding for header and bottom bar
           Positioned.fill(
             child: Column(
               children: [
-                const SizedBox(height: 100), // Space for fixed header
+                const SizedBox(height: 100),
                 Expanded(
                   child: SingleChildScrollView(
                     child: Padding(
@@ -44,9 +387,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               ],
             ),
           ),
-          // Fixed header
           _buildFixedHeader(),
-          // Fixed bottom button
           _buildFixedBottomButton(),
         ],
       ),
@@ -116,6 +457,11 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   }
 
   Widget _buildFieldInfoCard() {
+    final sportType = _court['sportType']?.toString().toLowerCase() ?? '';
+    final sportIcon = sportType.contains('cầu lông')
+        ? Icons.sports_tennis
+        : Icons.sports_soccer;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -135,7 +481,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Image.network(
-              'https://lh3.googleusercontent.com/aida-public/AB6AXuC9WQ33pnduTPjq9l-eSe-Ledu5xBP-0lR8TnlnPxQ-u-0uxjZoc0qsx4JCzuveAxFbfEfveBkNStP8316Od4jvU_-j-VLyfXHDXr4irDfV-0iefWzmN9CiXIeJmTCnzI_dKNQ7Afupc9w98y8n7M4W71TgOktfyXhBc1fRZ6-883O-h1BPeqwpmTPHntYivIDPRbu1pKYAq04azrQnJfbXyEp98lNlGqQ6bJvfHq9Xog0IaHStZP0NVw2y__A7zKg0rK36aeb4XUBT',
+              _courtImage(),
               width: 96,
               height: 96,
               fit: BoxFit.cover,
@@ -146,9 +492,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Sân bóng Chảo Lửa',
-                  style: TextStyle(
+                Text(
+                  _courtName(),
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1c170d),
@@ -156,9 +502,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  '30 Phan Thúc Duyện, Tân Bình, TP. HCM',
-                  style: TextStyle(
+                Text(
+                  _courtAddress(),
+                  style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF6B7280),
                   ),
@@ -174,9 +520,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                       color: Color(0xFFFF9800),
                     ),
                     const SizedBox(width: 6),
-                    const Text(
-                      '18:00 - 19:30 | Thứ 4, 15/11',
-                      style: TextStyle(
+                    Text(
+                      _bookingTimeLabel(),
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: Color(0xFFFF9800),
@@ -187,15 +533,15 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.sports_soccer,
+                    Icon(
+                      sportIcon,
                       size: 14,
-                      color: Color(0xFF6B7280),
+                      color: const Color(0xFF6B7280),
                     ),
                     const SizedBox(width: 6),
-                    const Text(
-                      'Sân 5 người - Sân A1',
-                      style: TextStyle(
+                    Text(
+                      _subCourtLabel(),
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: Color(0xFF6B7280),
@@ -268,7 +614,11 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   }
 
   Widget _buildPaymentOption(
-      String value, String label, Color bgColor, String text) {
+    String value,
+    String label,
+    Color bgColor,
+    String text,
+  ) {
     return InkWell(
       onTap: () {
         setState(() {
@@ -388,9 +738,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
   Widget _buildVoucherSection() {
     return InkWell(
-      onTap: () {
-        Navigator.pushNamed(context, '/voucher-selection');
-      },
+      onTap: _openVoucherSelection,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -415,19 +763,35 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'SPORTSET Voucher',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFF57C00),
-                ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _voucherTitle(),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: _selectedVoucher == null
+                          ? const Color(0xFF9CA3AF)
+                          : const Color(0xFFF57C00),
+                    ),
+                  ),
+                  if (_selectedVoucher != null)
+                    Text(
+                      _voucherSubtitle(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                ],
               ),
             ),
-            const Text(
-              'Chọn voucher',
-              style: TextStyle(
+            Text(
+              _selectedVoucher == null ? 'Chọn voucher' : 'Đổi voucher',
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF9CA3AF),
@@ -446,6 +810,12 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   }
 
   Widget _buildPaymentDetailsSection() {
+    final slotPrice = _toInt(_selectedSlot?['price']);
+    final basePrice = slotPrice > 0 ? slotPrice : _totalPrice;
+    final discountAmount = _voucherDiscountAmount();
+    const serviceFee = 0;
+    final grandTotal = (_totalPrice - discountAmount + serviceFee).clamp(0, _totalPrice + serviceFee);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -465,9 +835,16 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildPriceRow('Giá sân (1.5 giờ)', '375.000đ'),
+          _buildPriceRow('Giá sân ($_duration)', _formatCurrency(basePrice)),
+          if (_selectedVoucher != null) ...[
+            const SizedBox(height: 12),
+            _buildPriceRow(
+              'Voucher (${_selectedVoucher?['code']?.toString() ?? 'N/A'})',
+              '-${_formatCurrency(discountAmount)}',
+            ),
+          ],
           const SizedBox(height: 12),
-          _buildPriceRow('Phí dịch vụ', '5.000đ'),
+          _buildPriceRow('Phí dịch vụ', _formatCurrency(serviceFee)),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.only(top: 12),
@@ -491,9 +868,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                     color: Color(0xFF111827),
                   ),
                 ),
-                const Text(
-                  '380.000đ',
-                  style: TextStyle(
+                Text(
+                  _formatCurrency(grandTotal),
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFFFF9800),
@@ -573,9 +950,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 ],
               ),
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/booking-success');
-                },
+                onPressed: _isSubmitting ? null : _submitBooking,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
@@ -583,25 +958,34 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                     borderRadius: BorderRadius.circular(28),
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Thanh toán ngay',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Thanh toán ngay',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(
+                            Icons.verified_user,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.verified_user,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ],
-                ),
               ),
             ),
           ),

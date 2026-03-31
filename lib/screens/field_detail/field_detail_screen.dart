@@ -12,30 +12,12 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
 
-  final List<String> _images = [
-    'https://htsport.vn/wp-content/uploads/2019/12/25-kich-thuoc-san-bong-7-nguoi-2.jpg',
-    'https://www.aisedulaos.com/img/Sport-field-ais.jpg',
-    'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-  ];
-
-  final List<Map<String, dynamic>> _amenities = [
-    {'icon': Icons.local_parking, 'label': 'Bãi xe rộng'},
-    {'icon': Icons.water_drop, 'label': 'Nước miễn phí'},
-    {'icon': Icons.shower, 'label': 'Phòng tắm'},
-    {'icon': Icons.wifi, 'label': 'Free Wifi'},
-  ];
+  static const String _fallbackImage =
+      'https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80';
 
   @override
   void initState() {
     super.initState();
-    _pageController.addListener(() {
-      int next = _pageController.page!.round();
-      if (_currentImageIndex != next) {
-        setState(() {
-          _currentImageIndex = next;
-        });
-      }
-    });
   }
 
   @override
@@ -46,6 +28,9 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final court = _readCourtData(context);
+    final images = _resolveImages(court);
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F6),
       body: Stack(
@@ -54,8 +39,8 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildImageCarousel(),
-                _buildContent(),
+                _buildImageCarousel(images),
+                _buildContent(court),
                 const SizedBox(height: 100),
               ],
             ),
@@ -65,6 +50,300 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
         ],
       ),
     );
+  }
+
+  Map<String, dynamic> _readCourtData(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map<String, dynamic>) {
+      final nested = args['court'];
+      if (nested is Map<String, dynamic>) {
+        return nested;
+      }
+      return args;
+    }
+    return <String, dynamic>{};
+  }
+
+  List<String> _resolveImages(Map<String, dynamic> court) {
+    final rawImages = court['images'];
+    final output = <String>[];
+
+    if (rawImages is List) {
+      for (final item in rawImages) {
+        final text = item?.toString() ?? '';
+        if (text.isNotEmpty) {
+          output.add(text);
+        }
+      }
+    }
+
+    final imageUrl = court['imageUrl']?.toString() ?? '';
+    if (imageUrl.isNotEmpty && !output.contains(imageUrl)) {
+      output.add(imageUrl);
+    }
+
+    final image = court['image']?.toString() ?? '';
+    if (image.isNotEmpty && !output.contains(image)) {
+      output.add(image);
+    }
+
+    if (output.isEmpty) {
+      output.add(_fallbackImage);
+    }
+
+    if (_currentImageIndex >= output.length) {
+      _currentImageIndex = 0;
+    }
+
+    return output;
+  }
+
+  List<Map<String, dynamic>> _resolveAmenities(Map<String, dynamic> court) {
+    final raw = court['amenities'];
+    if (raw is List) {
+      final amenities = raw
+          .map((item) => item?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .map((item) => <String, dynamic>{
+                'icon': _amenityIconFor(item),
+                'label': item,
+              })
+          .toList();
+
+      if (amenities.isNotEmpty) {
+        return amenities;
+      }
+    }
+
+    return [
+      {'icon': Icons.local_parking, 'label': 'Bãi xe'},
+      {'icon': Icons.wifi, 'label': 'Wifi'},
+      {'icon': Icons.sports, 'label': 'Dụng cụ'},
+      {'icon': Icons.support_agent, 'label': 'Hỗ trợ'},
+    ];
+  }
+
+  IconData _amenityIconFor(String label) {
+    final normalized = _normalizeText(label);
+
+    if (normalized.contains('wifi') || normalized.contains('wi-fi')) {
+      return Icons.wifi;
+    }
+    if (normalized.contains('gui xe') ||
+        normalized.contains('bai xe') ||
+        normalized.contains('parking')) {
+      return Icons.local_parking;
+    }
+    if (normalized.contains('nuoc') ||
+        normalized.contains('nuoc uong') ||
+        normalized.contains('giai khat') ||
+        normalized.contains('drink')) {
+      return Icons.local_drink;
+    }
+    if (normalized.contains('tam') || normalized.contains('shower')) {
+      return Icons.shower;
+    }
+    if (normalized.contains('phong thay do') ||
+        normalized.contains('thay do') ||
+        normalized.contains('locker')) {
+      return Icons.checkroom;
+    }
+    if (normalized.contains('wc') ||
+        normalized.contains('ve sinh') ||
+        normalized.contains('toilet')) {
+      return Icons.wc;
+    }
+    if (normalized.contains('nha ve sinh')) {
+      return Icons.wc;
+    }
+    if (normalized.contains('den') || normalized.contains('lighting')) {
+      return Icons.lightbulb;
+    }
+    if (normalized.contains('huan luyen') ||
+        normalized.contains('coach') ||
+        normalized.contains('trong tai')) {
+      return Icons.groups;
+    }
+    if (normalized.contains('dung cu') ||
+        normalized.contains('vot') ||
+        normalized.contains('bong') ||
+        normalized.contains('thue')) {
+      return Icons.sports;
+    }
+    if (normalized.contains('bao ho') || normalized.contains('y te')) {
+      return Icons.health_and_safety;
+    }
+
+    return Icons.check_circle;
+  }
+
+  String _normalizeText(String input) {
+    final lower = input.toLowerCase().trim();
+    const replacements = {
+      'a': 'a',
+      'à': 'a',
+      'á': 'a',
+      'ạ': 'a',
+      'ả': 'a',
+      'ã': 'a',
+      'â': 'a',
+      'ầ': 'a',
+      'ấ': 'a',
+      'ậ': 'a',
+      'ẩ': 'a',
+      'ẫ': 'a',
+      'ă': 'a',
+      'ằ': 'a',
+      'ắ': 'a',
+      'ặ': 'a',
+      'ẳ': 'a',
+      'ẵ': 'a',
+      'è': 'e',
+      'é': 'e',
+      'ẹ': 'e',
+      'ẻ': 'e',
+      'ẽ': 'e',
+      'ê': 'e',
+      'ề': 'e',
+      'ế': 'e',
+      'ệ': 'e',
+      'ể': 'e',
+      'ễ': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'ị': 'i',
+      'ỉ': 'i',
+      'ĩ': 'i',
+      'ò': 'o',
+      'ó': 'o',
+      'ọ': 'o',
+      'ỏ': 'o',
+      'õ': 'o',
+      'ô': 'o',
+      'ồ': 'o',
+      'ố': 'o',
+      'ộ': 'o',
+      'ổ': 'o',
+      'ỗ': 'o',
+      'ơ': 'o',
+      'ờ': 'o',
+      'ớ': 'o',
+      'ợ': 'o',
+      'ở': 'o',
+      'ỡ': 'o',
+      'ù': 'u',
+      'ú': 'u',
+      'ụ': 'u',
+      'ủ': 'u',
+      'ũ': 'u',
+      'ư': 'u',
+      'ừ': 'u',
+      'ứ': 'u',
+      'ự': 'u',
+      'ử': 'u',
+      'ữ': 'u',
+      'ỳ': 'y',
+      'ý': 'y',
+      'ỵ': 'y',
+      'ỷ': 'y',
+      'ỹ': 'y',
+      'đ': 'd',
+    };
+
+    final buffer = StringBuffer();
+    for (final rune in lower.runes) {
+      final char = String.fromCharCode(rune);
+      buffer.write(replacements[char] ?? char);
+    }
+    return buffer.toString();
+  }
+
+  String _statusLabel(Map<String, dynamic> court) {
+    final status = (court['status'] ?? '').toString().trim().toLowerCase();
+    switch (status) {
+      case 'available':
+        return 'Mở cửa';
+      case 'maintenance':
+        return 'Bảo trì';
+      case 'closed':
+        return 'Đóng cửa';
+      default:
+        return status.isEmpty ? 'Chưa rõ' : status;
+    }
+  }
+
+  Color _statusColor(Map<String, dynamic> court) {
+    final status = (court['status'] ?? '').toString().trim().toLowerCase();
+    switch (status) {
+      case 'available':
+        return Colors.green;
+      case 'maintenance':
+        return Colors.orange;
+      case 'closed':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _description(Map<String, dynamic> court) {
+    final description = (court['description'] ?? '').toString().trim();
+    if (description.isNotEmpty) {
+      return description;
+    }
+    final facilityName = (court['facilityName'] ?? '').toString().trim();
+    if (facilityName.isNotEmpty) {
+      return 'Sân thuộc $facilityName, hiện chưa có mô tả chi tiết.';
+    }
+    return 'Sân hiện chưa có mô tả chi tiết.';
+  }
+
+  String _priceLabel(Map<String, dynamic> court) {
+    final value = court['pricePerHour'] ?? court['price'];
+    if (value is num) {
+      if (value >= 1000) {
+        return '${(value / 1000).round()}K/h';
+      }
+      return '${value.round()}/h';
+    }
+    final text = value?.toString() ?? '';
+    return text.isEmpty ? 'Liên hệ' : text;
+  }
+
+  List<Map<String, dynamic>> _normalizePricing(dynamic raw) {
+    if (raw is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    return raw
+        .whereType<Map>()
+        .map((item) => item.map(
+              (key, value) => MapEntry(key.toString(), value),
+            ))
+        .toList();
+  }
+
+  String _formatMoney(dynamic value) {
+    if (value is num) {
+      return '${value.toStringAsFixed(0)} đ';
+    }
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? 'Liên hệ' : text;
+  }
+
+  String _pricingTimeRange(Map<String, dynamic> item) {
+    final start = (item['startTime'] ?? '').toString().trim();
+    final end = (item['endTime'] ?? '').toString().trim();
+    if (start.isNotEmpty && end.isNotEmpty) {
+      return '$start - $end';
+    }
+    if (start.isNotEmpty) {
+      return 'Từ $start';
+    }
+    if (end.isNotEmpty) {
+      return 'Đến $end';
+    }
+    return 'Khung giờ linh hoạt';
   }
 
   Widget _buildFloatingHeader() {
@@ -168,17 +447,24 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     );
   }
 
-  Widget _buildImageCarousel() {
+  Widget _buildImageCarousel(List<String> images) {
     return SizedBox(
       height: 320,
       child: Stack(
         children: [
           PageView.builder(
             controller: _pageController,
-            itemCount: _images.length,
+            itemCount: images.length,
+            onPageChanged: (index) {
+              if (_currentImageIndex != index) {
+                setState(() {
+                  _currentImageIndex = index;
+                });
+              }
+            },
             itemBuilder: (context, index) {
               return Image.network(
-                _images[index],
+                images[index],
                 fit: BoxFit.cover,
               );
             },
@@ -200,7 +486,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: List.generate(_images.length, (index) {
+                      children: List.generate(images.length, (index) {
                         return Container(
                           width: 6,
                           height: 6,
@@ -224,7 +510,12 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(Map<String, dynamic> court) {
+    final name = (court['name'] ?? 'Chưa có tên sân').toString();
+    final address = (court['address'] ?? 'Chưa cập nhật địa chỉ').toString();
+    final facilityName = (court['facilityName'] ?? '').toString().trim();
+    final sportType = (court['sportType'] ?? '').toString().trim();
+
     return Container(
       transform: Matrix4.translationValues(0, -16, 0),
       decoration: const BoxDecoration(
@@ -236,14 +527,27 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Sân bóng Chảo Lửa',
+            Text(
+              name,
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF1A237E),
               ),
             ),
+            if (facilityName.isNotEmpty || sportType.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                [facilityName, sportType]
+                    .where((item) => item.isNotEmpty)
+                    .join(' • '),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
             Row(
               children: [
@@ -255,7 +559,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '30 Phan Thúc Duyện, Tân Bình, TP. HCM',
+                    address,
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[500],
@@ -265,11 +569,13 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            _buildStatsRow(),
+            _buildStatsRow(court),
             const SizedBox(height: 16),
-            _buildIntroduction(),
+            _buildIntroduction(court),
             const SizedBox(height: 20),
-            _buildAmenities(),
+            _buildPricingSection(court),
+            const SizedBox(height: 20),
+            _buildAmenities(court),
             const SizedBox(height: 12),
             _buildReviews(),
           ],
@@ -278,7 +584,15 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     );
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(Map<String, dynamic> court) {
+    final ratingValue = court['rating'];
+    final rating = ratingValue is num
+        ? ratingValue.toStringAsFixed(1)
+        : (ratingValue?.toString() ?? '0.0');
+    final distance = (court['distance'] ?? '-- km').toString();
+    final statusText = _statusLabel(court);
+    final statusColor = _statusColor(court);
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
@@ -294,11 +608,11 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.star, color: Color(0xFFFF9800), size: 18),
-                    SizedBox(width: 4),
+                  children: [
+                    const Icon(Icons.star, color: Color(0xFFFF9800), size: 18),
+                    const SizedBox(width: 4),
                     Text(
-                      '4.8',
+                      rating,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -329,11 +643,11 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.near_me, color: Color(0xFF1A237E), size: 18),
-                    SizedBox(width: 4),
+                  children: [
+                    const Icon(Icons.near_me, color: Color(0xFF1A237E), size: 18),
+                    const SizedBox(width: 4),
                     Text(
-                      '1.2 km',
+                      distance,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -364,11 +678,11 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.check_circle, color: Colors.green, size: 18),
-                    SizedBox(width: 4),
+                  children: [
+                    Icon(Icons.check_circle, color: statusColor, size: 18),
+                    const SizedBox(width: 4),
                     Text(
-                      'Mở cửa',
+                      statusText,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -394,7 +708,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     );
   }
 
-  Widget _buildIntroduction() {
+  Widget _buildIntroduction(Map<String, dynamic> court) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -408,18 +722,29 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Sân bóng Chảo Lửa tự hào sở hữu mặt cỏ nhân tạo chất lượng cao đạt chuẩn FIFA, mang lại cảm giác êm ái và giảm thiểu tối đa chấn thương cho người chơi. Hệ thống chiếu sáng hiện đại với 24 đèn LED cao áp đảm bảo độ sáng như ban ngày cho các trận đấu đêm. Không gian sân cực kỳ thoáng đãng, rộng rãi, là địa điểm lý tưởng cho các trận cầu kịch tính và sôi động tại khu vực Tân Bình.',
+          _description(court),
           style: TextStyle(
             fontSize: 14,
             color: Colors.grey[600],
             height: 1.6,
           ),
         ),
+        const SizedBox(height: 8),
+        Text(
+          'Giá tham khảo: ${_priceLabel(court)}',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFFF9800),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildAmenities() {
+  Widget _buildAmenities(Map<String, dynamic> court) {
+    final amenities = _resolveAmenities(court);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -431,57 +756,173 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             color: Color(0xFF1A237E),
           ),
         ),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 1.0,
-          ),
-          itemCount: _amenities.length,
-          itemBuilder: (context, index) {
-            final amenity = _amenities[index];
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFFFE0B2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        offset: const Offset(0, 2),
-                        blurRadius: 8,
-                      ),
-                    ],
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: amenities.map((amenity) {
+            return Container(
+              constraints: const BoxConstraints(minHeight: 34, minWidth: 96),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFE0B2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    offset: const Offset(0, 1),
+                    blurRadius: 4,
                   ),
-                  child: Icon(
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
                     amenity['icon'],
                     color: const Color(0xFFFF9800),
-                    size: 20,
+                    size: 16,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  amenity['label'],
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[600],
+                  const SizedBox(width: 6),
+                  Text(
+                    amenity['label'],
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+                ],
+              ),
             );
-          },
+          }).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildPricingSection(Map<String, dynamic> court) {
+    final weekdayPricing = _normalizePricing(court['weekdayPricing']);
+    final weekendPricing = _normalizePricing(court['weekendPricing']);
+    final hasDetailPricing = weekdayPricing.isNotEmpty || weekendPricing.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Bảng giá theo ngày',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1A237E),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (hasDetailPricing) ...[
+          _buildPricingGroup(
+            title: 'Giá ngày thường',
+            items: weekdayPricing,
+            emptyText: 'Chưa cập nhật giá ngày thường',
+          ),
+          const SizedBox(height: 12),
+          _buildPricingGroup(
+            title: 'Giá cuối tuần',
+            items: weekendPricing,
+            emptyText: 'Chưa cập nhật giá cuối tuần',
+          ),
+        ] else
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFFE0B2)),
+            ),
+            child: Text(
+              'Giá tham khảo: ${_priceLabel(court)}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFFF9800),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPricingGroup({
+    required String title,
+    required List<Map<String, dynamic>> items,
+    required String emptyText,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFE0B2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A237E),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (items.isEmpty)
+            Text(
+              emptyText,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            )
+          else
+            ...items.map((item) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _pricingTimeRange(item),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _formatMoney(item['price']),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFFF9800),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
     );
   }
 
@@ -702,7 +1143,13 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
-                Navigator.pushNamed(context, '/booking');
+                Navigator.pushNamed(
+                  context,
+                  '/booking',
+                  arguments: {
+                    'court': _readCourtData(context),
+                  },
+                );
               },
               borderRadius: BorderRadius.circular(16),
               child: Row(

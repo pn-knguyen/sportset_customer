@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:ui';
 
 class ExploreScreen extends StatefulWidget {
@@ -9,62 +10,117 @@ class ExploreScreen extends StatefulWidget {
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
-  String _selectedCategory = 'Bóng đá';
+  String _selectedCategory = '';
   final TextEditingController _searchController = TextEditingController();
 
-  final List<String> _categories = [
-    'Bóng đá',
-    'Cầu lông',
-    'Tennis',
-    'Bóng rổ',
-    'Bơi lội',
-  ];
+  String _normalizeText(String? value) {
+    return (value ?? '').trim().toLowerCase();
+  }
 
-  final List<Map<String, dynamic>> _venues = [
-    {
-      'name': 'Sân bóng Chảo Lửa',
+  double _toDouble(dynamic value, {double fallback = 0}) {
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
+    }
+    return fallback;
+  }
+
+  String _toPrice(dynamic value) {
+    if (value is num) {
+      if (value >= 1000) {
+        return '${(value / 1000).toStringAsFixed(0)}k';
+      }
+      return value.toStringAsFixed(0);
+    }
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? 'Liên hệ' : text;
+  }
+
+  String _formatOperatingHours(Map<String, dynamic> data) {
+    final weekdayPricing = data['weekdayPricing'];
+    if (weekdayPricing is List && weekdayPricing.isNotEmpty) {
+      final firstSlot = weekdayPricing.first;
+      if (firstSlot is Map<String, dynamic>) {
+        final start = firstSlot['startTime']?.toString();
+        final end = firstSlot['endTime']?.toString();
+        if ((start ?? '').isNotEmpty && (end ?? '').isNotEmpty) {
+          return '$start - $end';
+        }
+      }
+    }
+    return 'Giờ linh hoạt';
+  }
+
+  Map<String, dynamic> _courtFromFirestore(
+    Map<String, dynamic> data, {
+    required String docId,
+  }) {
+    final detailData = Map<String, dynamic>.from(data);
+    detailData['id'] = docId;
+    return {
+      'id': docId,
+      'name': data['name'] ?? 'Chưa có tên sân',
       'image':
-          'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-      'rating': 4.8,
-      'price': '300k',
-      'address': '30 Phan Thúc Duyện, Tân Bình',
-      'distance': '1.2 km',
-      'info': '6:00 - 22:00',
-      'infoIcon': Icons.schedule,
-    },
-    {
-      'name': 'Sân bóng Thành Đồng',
-      'image':
-          'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-      'rating': 4.7,
-      'price': '280k',
-      'address': '19 Sầm Sơn, Tân Bình',
-      'distance': '2.5 km',
-      'info': 'Cỏ nhân tạo',
-      'infoIcon': Icons.sports_soccer,
-    },
-    {
-      'name': 'Sân Cầu Lông Bình Thới',
-      'image':
-          'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-      'price': '120k',
-      'address': '220 Lãnh Binh Thăng, Q.11',
-      'distance': '1.5 km',
-      'info': 'Thảm chuyên dụng',
-      'infoIcon': Icons.layers,
-    },
-    {
-      'name': 'Sân Tennis Lan Anh',
-      'image':
-          'https://img.meta.com.vn/Data/image/2021/03/15/kich-thuoc-san-tennis-7.jpg',
-      'rating': 4.8,
-      'price': '550k',
-      'address': '291 Cách Mạng Tháng 8, Q.10',
-      'distance': '1.5 km',
-      'info': 'Có mái che',
-      'infoIcon': Icons.wb_sunny,
-    },
-  ];
+          data['imageUrl'] ??
+          data['image'] ??
+          'https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80',
+      'rating': _toDouble(data['rating'], fallback: 0),
+      'price': _toPrice(data['pricePerHour'] ?? data['price']),
+      'address': data['address'] ?? 'Chưa cập nhật địa chỉ',
+      'distance': data['distance']?.toString() ?? '-- km',
+      'info': data['facilityName'] ?? _formatOperatingHours(data),
+      'infoIcon': Icons.business,
+      'category': data['sportType']?.toString() ?? '',
+      'detailData': detailData,
+    };
+  }
+
+  List<String> _buildVisibleSports(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final sports = <String>[];
+    for (final doc in docs) {
+      final data = doc.data();
+      if (data['isVisible'] != true) {
+        continue;
+      }
+      final name = data['name']?.toString().trim() ?? '';
+      if (name.isNotEmpty && !sports.contains(name)) {
+        sports.add(name);
+      }
+    }
+    return sports;
+  }
+
+  void _syncSelectedCategory(List<String> categories) {
+    if (categories.isEmpty) {
+      return;
+    }
+    if (categories.contains(_selectedCategory)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedCategory = categories.first;
+      });
+    });
+  }
+
+  List<Map<String, dynamic>> _buildFilteredVenues(
+    List<Map<String, dynamic>> source,
+    String selectedCategory,
+  ) {
+    final query = _searchController.text.trim().toLowerCase();
+    return source.where((venue) {
+      final venueCategory = _normalizeText(venue['category']?.toString());
+      final categoryMatched =
+          venueCategory == _normalizeText(selectedCategory);
+      final text = '${venue['name'] ?? ''} ${venue['address'] ?? ''}'.toLowerCase();
+      final searchMatched = query.isEmpty || text.contains(query);
+      return categoryMatched && searchMatched;
+    }).toList();
+  }
 
   @override
   void dispose() {
@@ -76,27 +132,93 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F6),
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              itemCount: _venues.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: _buildVenueCard(_venues[index]),
-                );
-              },
-            ),
-          ),
-        ],
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('sports')
+            .where('isVisible', isEqualTo: true)
+            .snapshots(),
+        builder: (context, sportsSnapshot) {
+          if (sportsSnapshot.connectionState == ConnectionState.waiting &&
+              !sportsSnapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (sportsSnapshot.hasError) {
+            return const Center(
+              child: Text('Không thể tải danh mục từ Firebase'),
+            );
+          }
+
+          final categories = _buildVisibleSports(sportsSnapshot.data?.docs ?? []);
+          if (categories.isEmpty) {
+            return const Center(
+              child: Text('Chưa có danh mục nào đang hiển thị'),
+            );
+          }
+
+          _syncSelectedCategory(categories);
+          final selectedCategory = categories.contains(_selectedCategory)
+              ? _selectedCategory
+              : categories.first;
+
+          return Column(
+            children: [
+              _buildHeader(categories),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('courts')
+                      .where('sportType', isEqualTo: selectedCategory)
+                      .snapshots(),
+                  builder: (context, courtsSnapshot) {
+                    if (courtsSnapshot.connectionState == ConnectionState.waiting &&
+                        !courtsSnapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (courtsSnapshot.hasError) {
+                      return const Center(
+                        child: Text('Không thể tải dữ liệu sân từ Firebase'),
+                      );
+                    }
+
+                    final filteredVenues = _buildFilteredVenues(
+                            courtsSnapshot.data?.docs
+                              .map((doc) => _courtFromFirestore(doc.data(), docId: doc.id))
+                              .toList() ??
+                          <Map<String, dynamic>>[],
+                      selectedCategory,
+                    );
+
+                    if (filteredVenues.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'Không có sân cho danh mục $selectedCategory',
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                      itemCount: filteredVenues.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          child: _buildVenueCard(filteredVenues[index]),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(List<String> categories) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFFFF8F6),
@@ -227,6 +349,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     Expanded(
                       child: TextField(
                         controller: _searchController,
+                        onChanged: (_) {
+                          setState(() {});
+                        },
                         decoration: InputDecoration(
                           hintText: 'Tìm sân, khu vực...',
                           hintStyle: TextStyle(
@@ -275,9 +400,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
               child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 scrollDirection: Axis.horizontal,
-                itemCount: _categories.length,
+                itemCount: categories.length,
                 itemBuilder: (context, index) {
-                  final category = _categories[index];
+                  final category = categories[index];
                   final isSelected = category == _selectedCategory;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
@@ -353,7 +478,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _buildVenueCard(Map<String, dynamic> venue) {
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, '/field-detail');
+        Navigator.pushNamed(
+          context,
+          '/field-detail',
+          arguments: {'court': venue['detailData'] ?? venue},
+        );
       },
       child: Container(
         decoration: BoxDecoration(
@@ -579,7 +708,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       ),
                       GestureDetector(
                         onTap: () {
-                          Navigator.pushNamed(context, '/field-detail');
+                          Navigator.pushNamed(
+                            context,
+                            '/field-detail',
+                            arguments: {'court': venue['detailData'] ?? venue},
+                          );
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(

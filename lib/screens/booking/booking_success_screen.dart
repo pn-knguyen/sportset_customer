@@ -1,8 +1,176 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-class BookingSuccessScreen extends StatelessWidget {
+class BookingSuccessScreen extends StatefulWidget {
   const BookingSuccessScreen({super.key});
+
+  @override
+  State<BookingSuccessScreen> createState() => _BookingSuccessScreenState();
+}
+
+class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
+  bool _didInitFromArgs = false;
+
+  String _bookingId = '';
+  Map<String, dynamic> _court = {};
+  Map<String, dynamic>? _selectedDate;
+  Map<String, dynamic>? _selectedSlot;
+  String? _selectedSubCourt;
+  String _duration = '1 tiếng 30 phút';
+  int _totalPrice = 0;
+  String _paymentMethodLabel = 'Chưa chọn';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitFromArgs) {
+      return;
+    }
+    _didInitFromArgs = true;
+
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args == null) {
+      return;
+    }
+
+    _bookingId = args['bookingId']?.toString() ?? '';
+
+    final incomingCourt = args['court'];
+    if (incomingCourt is Map) {
+      _court = Map<String, dynamic>.from(incomingCourt);
+    } else {
+      _court = {
+        'name': (args['courtName'] ?? args['name'] ?? 'Sân thể thao').toString(),
+        'sportType': (args['sportType'] ?? '').toString(),
+      };
+    }
+
+    final incomingDate = args['selectedDate'];
+    if (incomingDate is Map) {
+      _selectedDate = Map<String, dynamic>.from(incomingDate);
+    } else {
+      final fallbackDate = (args['date'] ?? '').toString();
+      if (fallbackDate.isNotEmpty) {
+        _selectedDate = {'day': '', 'date': fallbackDate, 'month': ''};
+      }
+    }
+
+    final incomingSlot = args['selectedSlot'];
+    if (incomingSlot is Map) {
+      _selectedSlot = Map<String, dynamic>.from(incomingSlot);
+    } else {
+      final fallbackTime = (args['time'] ?? '').toString();
+      if (fallbackTime.contains('-')) {
+        final parts = fallbackTime.split('-');
+        if (parts.length >= 2) {
+          _selectedSlot = {
+            'startTime': parts.first.trim(),
+            'endTime': parts.last.trim(),
+          };
+        }
+      }
+    }
+
+    _selectedSubCourt = args['selectedSubCourt']?.toString();
+    _duration = args['duration']?.toString() ?? _duration;
+    _totalPrice = _toInt(args['totalPrice']);
+    _paymentMethodLabel = args['paymentMethodLabel']?.toString() ?? 'Chưa chọn';
+  }
+
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value) ?? fallback;
+    }
+    return fallback;
+  }
+
+  String _formatCurrency(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      final reverseIndex = digits.length - i;
+      buffer.write(digits[i]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        buffer.write('.');
+      }
+    }
+    return '${buffer.toString()}đ';
+  }
+
+  String _bookingCode() {
+    if (_bookingId.isEmpty) {
+      return '#SP-PENDING';
+    }
+    final trimmed = _bookingId.length > 8
+        ? _bookingId.substring(0, 8)
+        : _bookingId;
+    return '#SP-${trimmed.toUpperCase()}';
+  }
+
+  String _courtName() {
+    return _court['name']?.toString() ?? 'Sân thể thao';
+  }
+
+  String _sportType() {
+    return _court['sportType']?.toString() ?? '';
+  }
+
+  String _timeLabel() {
+    final slot = _selectedSlot;
+    if (slot == null) {
+      return 'Chưa xác định';
+    }
+    final start = slot['startTime']?.toString() ?? '';
+    final end = slot['endTime']?.toString() ?? '';
+    if (start.isEmpty || end.isEmpty) {
+      return 'Chưa xác định';
+    }
+    return '$start - $end';
+  }
+
+  String _dateLabel() {
+    final selectedDate = _selectedDate;
+    if (selectedDate == null) {
+      return 'Chưa xác định';
+    }
+
+    final day = selectedDate['day']?.toString() ?? '';
+    final date = selectedDate['date']?.toString() ?? '';
+    final month = selectedDate['month']?.toString() ?? '';
+
+    if (date.isNotEmpty && month.isNotEmpty && day.isNotEmpty) {
+      return '$day, $date/$month';
+    }
+    if (date.isNotEmpty && month.isNotEmpty) {
+      return '$date/$month';
+    }
+    if (date.isNotEmpty) {
+      return date;
+    }
+    return 'Chưa xác định';
+  }
+
+  String _qrData() {
+    return '${_bookingCode()}|${_courtName()}|${_timeLabel()}|${_dateLabel()}';
+  }
+
+  IconData _sportIcon() {
+    final sportType = _sportType().toLowerCase();
+    if (sportType.contains('cầu lông')) {
+      return Icons.sports_tennis;
+    }
+    if (sportType.contains('bóng rổ')) {
+      return Icons.sports_basketball;
+    }
+    return Icons.sports_soccer;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +198,6 @@ class BookingSuccessScreen extends StatelessWidget {
       ),
     );
   }
-
-
 
   Widget _buildSuccessIcon() {
     return Column(
@@ -101,7 +267,7 @@ class BookingSuccessScreen extends StatelessWidget {
               ),
             ),
             child: QrImageView(
-              data: 'SP12345-CHAOLUA-18:00-15/11/2024',
+              data: _qrData(),
               version: QrVersions.auto,
               size: 150,
               backgroundColor: Colors.white,
@@ -117,7 +283,7 @@ class BookingSuccessScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Vụi lòng đưa mã QR này cho nhân viên quản lý sân.',
+            'Vui lòng đưa mã QR này cho nhân viên quản lý sân.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
@@ -153,10 +319,10 @@ class BookingSuccessScreen extends StatelessWidget {
                 ),
               ),
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                const Text(
                   'MÃ ĐƠN HÀNG',
                   style: TextStyle(
                     fontSize: 10,
@@ -166,8 +332,8 @@ class BookingSuccessScreen extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '#SP12345',
-                  style: TextStyle(
+                  _bookingCode(),
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFFFF9800),
@@ -180,62 +346,74 @@ class BookingSuccessScreen extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.sports_soccer,
-                color: Color(0xFFFF9800),
+              Icon(
+                _sportIcon(),
+                color: const Color(0xFFFF9800),
                 size: 24,
               ),
               const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Tên sân',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tên sân',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Sân bóng Chảo Lửa',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1c170d),
+                    const SizedBox(height: 2),
+                    Text(
+                      _courtName(),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1c170d),
+                      ),
                     ),
-                  ),
-                ],
+                    if ((_selectedSubCourt ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _selectedSubCourt!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.schedule,
                       color: Color(0xFFFF9800),
                       size: 24,
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Thời gian',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          '18:00 - 19:30',
-                          style: TextStyle(
+                          _timeLabel(),
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF1c170d),
@@ -246,31 +424,31 @@ class BookingSuccessScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              SizedBox(width: 16),
+              const SizedBox(width: 16),
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.calendar_today,
                       color: Color(0xFFFF9800),
                       size: 24,
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Ngày',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Thứ 4, 15/11',
-                          style: TextStyle(
+                          _dateLabel(),
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF1c170d),
@@ -282,6 +460,35 @@ class BookingSuccessScreen extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.only(top: 10),
+            decoration: const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Color(0xFFFFF3E0), width: 1),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Thanh toán ($_paymentMethodLabel)',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+                Text(
+                  _formatCurrency(_totalPrice),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFF9800),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -315,10 +522,9 @@ class BookingSuccessScreen extends StatelessWidget {
               onTap: () {
                 Navigator.pushNamedAndRemoveUntil(
                   context,
-                  '/main',
+                  '/booking-history',
                   (route) => false,
                 );
-                // TODO: Navigate to booking history tab
               },
               borderRadius: BorderRadius.circular(28),
               child: const Center(
@@ -373,5 +579,4 @@ class BookingSuccessScreen extends StatelessWidget {
       ],
     );
   }
-
 }

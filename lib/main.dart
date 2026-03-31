@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'firebase_options.dart';
 
 // Intro screen
 import 'screens/intro/intro_screen.dart';
@@ -37,7 +39,11 @@ import 'screens/profile/terms_screen.dart';
 import 'screens/profile/privacy_policy_screen.dart';
 import 'screens/profile/vouchers_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const SportsetApp());
 }
 

@@ -11,40 +11,279 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   int _currentImageIndex = 0;
   int _selectedDateIndex = 0;
-  String? _selectedStartTime = '18:00';
+  String? _selectedStartTime;
   String _selectedDuration = '1 tiếng 30 phút';
+  String? _selectedSubCourt;
   bool _isFavorite = false;
+  bool _didInitFromArgs = false;
+  Map<String, dynamic> _court = {};
 
-  final List<String> _fieldImages = [
+  List<String> _fieldImages = [
     'https://htsport.vn/wp-content/uploads/2019/12/25-kich-thuoc-san-bong-7-nguoi-2.jpg',
     'https://www.aisedulaos.com/img/Sport-field-ais.jpg',
     'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
   ];
 
-  final List<Map<String, dynamic>> _dates = [
-    {'day': 'Th 4', 'date': '15', 'isWeekend': false},
-    {'day': 'Th 5', 'date': '16', 'isWeekend': false},
-    {'day': 'Th 6', 'date': '17', 'isWeekend': false},
-    {'day': 'Th 7', 'date': '18', 'isWeekend': true},
-    {'day': 'CN', 'date': '19', 'isWeekend': true},
-  ];
-
-  final List<String> _startTimes = [
-    '16:30',
-    '17:00',
-    '17:30',
-    '18:00',
-    '18:30',
-    '19:00',
-    '19:30',
-    '20:00',
-    '20:30',
-    '21:00',
-    '21:30',
-    '22:00'
-  ];
+  late final List<Map<String, dynamic>> _dates = _buildUpcomingDates();
+  List<Map<String, dynamic>> _subCourts = [];
+  List<Map<String, dynamic>> _activePricingSlots = [];
 
   final List<String> _durations = ['1 tiếng', '1 tiếng 30 phút', '2 tiếng'];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitFromArgs) {
+      return;
+    }
+    _didInitFromArgs = true;
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final incomingCourt = args?['court'];
+    if (incomingCourt is Map) {
+      _court = Map<String, dynamic>.from(incomingCourt);
+    }
+
+    _fieldImages = _extractImages(_court);
+    _subCourts = _extractSubCourts(_court);
+    _selectedSubCourt = _subCourts
+        .where((subCourt) => _isAvailableStatus(subCourt['status']))
+        .map((subCourt) => subCourt['name']?.toString() ?? '')
+        .firstWhere((name) => name.isNotEmpty, orElse: () => '');
+    if (_selectedSubCourt?.isEmpty ?? true) {
+      _selectedSubCourt = null;
+    }
+    _refreshPricingSlots();
+  }
+
+  List<Map<String, dynamic>> _buildUpcomingDates() {
+    const dayNames = ['CN', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7'];
+    final now = DateTime.now();
+    return List.generate(7, (index) {
+      final date = now.add(Duration(days: index));
+      return {
+        'day': dayNames[date.weekday % 7],
+        'date': date.day.toString().padLeft(2, '0'),
+        'month': date.month.toString().padLeft(2, '0'),
+        'isWeekend': date.weekday == DateTime.saturday ||
+            date.weekday == DateTime.sunday,
+        'dateTime': date,
+      };
+    });
+  }
+
+  List<String> _extractImages(Map<String, dynamic> court) {
+    final imagesRaw = court['images'];
+    final result = <String>[];
+    if (imagesRaw is List) {
+      for (final item in imagesRaw) {
+        final value = item?.toString() ?? '';
+        if (value.isNotEmpty) {
+          result.add(value);
+        }
+      }
+    }
+    final imageUrl = court['imageUrl']?.toString() ?? court['image']?.toString() ?? '';
+    if (imageUrl.isNotEmpty && !result.contains(imageUrl)) {
+      result.insert(0, imageUrl);
+    }
+    if (result.isEmpty) {
+      return [
+        'https://htsport.vn/wp-content/uploads/2019/12/25-kich-thuoc-san-bong-7-nguoi-2.jpg',
+      ];
+    }
+    return result;
+  }
+
+  List<Map<String, dynamic>> _extractSubCourts(Map<String, dynamic> court) {
+    final source = court['subCourts'];
+    if (source is! List) {
+      return [];
+    }
+    return source
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value) ?? fallback;
+    }
+    return fallback;
+  }
+
+  double _toDouble(dynamic value, {double fallback = 0}) {
+    if (value is double) {
+      return value;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value) ?? fallback;
+    }
+    return fallback;
+  }
+
+  bool _isAvailableStatus(dynamic status) {
+    return status?.toString().trim().toLowerCase() == 'available';
+  }
+
+  List<Map<String, dynamic>> _normalizePricingList(dynamic source) {
+    if (source is! List) {
+      return [];
+    }
+    final slots = <Map<String, dynamic>>[];
+    for (final item in source) {
+      if (item is! Map) {
+        continue;
+      }
+      final map = Map<String, dynamic>.from(item);
+      final startTime = map['startTime']?.toString() ?? '';
+      final endTime = map['endTime']?.toString() ?? '';
+      final price = _toInt(map['price']);
+      if (startTime.isEmpty || endTime.isEmpty) {
+        continue;
+      }
+      slots.add({
+        'startTime': startTime,
+        'endTime': endTime,
+        'price': price,
+      });
+    }
+    return slots;
+  }
+
+  void _refreshPricingSlots() {
+    final isWeekend = _dates[_selectedDateIndex]['isWeekend'] as bool;
+    final weekendPricing = _normalizePricingList(_court['weekendPricing']);
+    final weekdayPricing = _normalizePricingList(_court['weekdayPricing']);
+    final selected = isWeekend ? weekendPricing : weekdayPricing;
+    final fallbackPrice = _toInt(_court['pricePerHour'] ?? _court['price']);
+
+    if (selected.isNotEmpty) {
+      _activePricingSlots = selected;
+      _selectedStartTime =
+          '${selected.first['startTime']} - ${selected.first['endTime']}';
+      return;
+    }
+
+    if (fallbackPrice > 0) {
+      _activePricingSlots = [
+        {
+          'startTime': '05:00',
+          'endTime': '22:00',
+          'price': fallbackPrice,
+        },
+      ];
+      _selectedStartTime = '05:00 - 22:00';
+      return;
+    }
+
+    _activePricingSlots = [];
+    _selectedStartTime = null;
+  }
+
+  int _durationMinutes(String duration) {
+    if (duration.contains('30')) {
+      return 90;
+    }
+    if (duration.startsWith('2')) {
+      return 120;
+    }
+    return 60;
+  }
+
+  Map<String, dynamic>? get _selectedPricingSlot {
+    if (_selectedStartTime == null) {
+      return null;
+    }
+    for (final slot in _activePricingSlots) {
+      final key = '${slot['startTime']} - ${slot['endTime']}';
+      if (key == _selectedStartTime) {
+        return slot;
+      }
+    }
+    return null;
+  }
+
+  String _formatCurrency(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      final reverseIndex = digits.length - i;
+      buffer.write(digits[i]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        buffer.write('.');
+      }
+    }
+    return '${buffer.toString()}đ';
+  }
+
+  int get _totalPrice {
+    final slot = _selectedPricingSlot;
+    if (slot == null) {
+      return 0;
+    }
+    final basePrice = _toInt(slot['price']);
+    if (basePrice <= 0) {
+      return 0;
+    }
+    return (basePrice * _durationMinutes(_selectedDuration) / 60).round();
+  }
+
+  bool get _isCourtAvailable => _isAvailableStatus(_court['status']);
+
+  bool get _hasSubCourtData => _subCourts.isNotEmpty;
+
+  bool get _hasAvailableSubCourt {
+    if (!_hasSubCourtData) {
+      return true;
+    }
+    return _subCourts.any((subCourt) => _isAvailableStatus(subCourt['status']));
+  }
+
+  bool get _canBook {
+    if (!_isCourtAvailable || !_hasAvailableSubCourt) {
+      return false;
+    }
+    if (_hasSubCourtData && _selectedSubCourt == null) {
+      return false;
+    }
+    return _selectedPricingSlot != null;
+  }
+
+  String get _bookBlockReason {
+    if (!_isCourtAvailable) {
+      return 'Sân hiện không khả dụng để đặt.';
+    }
+    if (!_hasAvailableSubCourt) {
+      return 'Tất cả sân con đã đầy. Vui lòng chọn sân khác.';
+    }
+    if (_selectedPricingSlot == null) {
+      return 'Không có khung giờ hợp lệ để đặt.';
+    }
+    return 'Vui lòng kiểm tra lại thông tin đặt sân.';
+  }
+
+  IconData _amenityIcon(String label) {
+    final value = label.toLowerCase();
+    if (value.contains('wifi')) return Icons.wifi;
+    if (value.contains('xe') || value.contains('parking')) return Icons.local_parking;
+    if (value.contains('nước') || value.contains('drink')) return Icons.local_drink;
+    if (value.contains('wc') || value.contains('toilet') || value.contains('vệ sinh')) {
+      return Icons.wc;
+    }
+    if (value.contains('ăn') || value.contains('tin')) return Icons.restaurant;
+    return Icons.check_circle_outline;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +303,8 @@ class _BookingScreenState extends State<BookingScreen> {
                       _buildFieldInfo(),
                       const SizedBox(height: 24),
                       _buildAmenities(),
+                      const SizedBox(height: 24),
+                      _buildSubCourtSelection(),
                       const SizedBox(height: 32),
                       _buildDateSelection(),
                       const SizedBox(height: 32),
@@ -232,18 +473,37 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildFieldInfo() {
+    final courtName = _court['name']?.toString() ?? 'Sân đang cập nhật';
+    final address = _court['address']?.toString() ?? 'Chưa cập nhật địa chỉ';
+    final distance = _court['distance']?.toString();
+    final rating = _toDouble(_court['rating'], fallback: 4.8);
+    final status = _court['status']?.toString() ?? 'unknown';
+    final facilityName = _court['facilityName']?.toString() ?? '';
+    final locationText =
+        distance != null && distance.isNotEmpty ? '$address • $distance km' : address;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Sân bóng Chảo Lửa',
-          style: TextStyle(
+        Text(
+          courtName,
+          style: const TextStyle(
             fontSize: 30,
             fontWeight: FontWeight.bold,
             color: Color(0xFF1c170d),
             letterSpacing: -0.5,
           ),
         ),
+        if (facilityName.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            facilityName,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFf4ab25),
+            ),
+          ),
+        ],
         const SizedBox(height: 4),
         Row(
           children: [
@@ -253,11 +513,15 @@ class _BookingScreenState extends State<BookingScreen> {
               color: Color(0xFF9c7f49),
             ),
             const SizedBox(width: 8),
-            const Text(
-              '30 Phan Thúc Duyện, Tân Bình • 2.5 km',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF9c7f49),
+            Expanded(
+              child: Text(
+                locationText,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF9c7f49),
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -287,9 +551,9 @@ class _BookingScreenState extends State<BookingScreen> {
                       color: Color(0xFFf4ab25),
                     ),
                     const SizedBox(width: 4),
-                    const Text(
-                      '4.8',
-                      style: TextStyle(
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1c170d),
@@ -297,7 +561,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     ),
                     const SizedBox(width: 4),
                     const Text(
-                      '(120 reviews)',
+                      '(đánh giá cộng đồng)',
                       style: TextStyle(
                         fontSize: 12,
                         color: Color(0xFF9c7f49),
@@ -307,12 +571,16 @@ class _BookingScreenState extends State<BookingScreen> {
                 ),
               ),
               const SizedBox(width: 16),
-              const Text(
-                'Đang mở cửa • Đến 23:00',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.green,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  _isAvailableStatus(status)
+                      ? 'Đang nhận đặt lịch'
+                      : 'Tạm ngưng nhận đặt',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _isAvailableStatus(status) ? Colors.green : Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -323,12 +591,19 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildAmenities() {
-    final amenities = [
-      {'icon': Icons.wifi, 'label': 'Wifi miễn phí'},
-      {'icon': Icons.local_drink, 'label': 'Nước uống'},
-      {'icon': Icons.local_parking, 'label': 'Bãi xe rộng'},
-      {'icon': Icons.restaurant, 'label': 'Căn tin'},
-    ];
+    final amenitiesSource = _court['amenities'];
+    final amenities = <String>[];
+    if (amenitiesSource is List) {
+      for (final item in amenitiesSource) {
+        final text = item?.toString() ?? '';
+        if (text.isNotEmpty) {
+          amenities.add(text);
+        }
+      }
+    }
+    if (amenities.isEmpty) {
+      amenities.addAll(['Wifi', 'Nước uống', 'Gửi xe']);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,16 +637,16 @@ class _BookingScreenState extends State<BookingScreen> {
                         ),
                       ),
                       child: Icon(
-                        amenity['icon'] as IconData,
+                        _amenityIcon(amenity),
                         color: const Color(0xFFf4ab25),
                         size: 20,
                       ),
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      width: 70,
+                      width: 76,
                       child: Text(
-                        amenity['label'] as String,
+                        amenity,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -379,6 +654,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -387,6 +663,96 @@ class _BookingScreenState extends State<BookingScreen> {
             }).toList(),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildSubCourtSelection() {
+    if (_subCourts.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Chọn sân con',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1c170d),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _subCourts.map((subCourt) {
+            final name = subCourt['name']?.toString() ?? 'Sân phụ';
+            final isAvailable = _isAvailableStatus(subCourt['status']);
+            final isSelected = _selectedSubCourt == name;
+            return InkWell(
+              onTap: isAvailable
+                  ? () {
+                      setState(() {
+                        _selectedSubCourt = name;
+                      });
+                    }
+                  : null,
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFFf4ab25)
+                      : (isAvailable ? Colors.white : Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFFf4ab25)
+                        : const Color(0xFFe8dfce),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isAvailable ? Icons.check_circle : Icons.block,
+                      size: 16,
+                      color: isSelected
+                          ? Colors.white
+                          : (isAvailable ? Colors.green : Colors.red),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isAvailable ? name : '$name (đã đầy)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white
+                            : (isAvailable
+                                ? const Color(0xFF1c170d)
+                                : Colors.grey.shade600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (!_hasAvailableSubCourt) ...[
+          const SizedBox(height: 10),
+          const Text(
+            'Tất cả sân con đã đầy, bạn chưa thể đặt khung giờ này.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.red,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -405,17 +771,6 @@ class _BookingScreenState extends State<BookingScreen> {
                 color: Color(0xFF1c170d),
               ),
             ),
-            TextButton(
-              onPressed: () {},
-              child: const Text(
-                'Xem tất cả',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFf4ab25),
-                ),
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -431,6 +786,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 onTap: () {
                   setState(() {
                     _selectedDateIndex = index;
+                    _refreshPricingSlots();
                   });
                 },
                 child: Container(
@@ -489,6 +845,15 @@ class _BookingScreenState extends State<BookingScreen> {
                               : (isWeekend ? Colors.red : const Color(0xFF1c170d)),
                         ),
                       ),
+                      Text(
+                        '/${date['month']}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isSelected
+                              ? Colors.white.withValues(alpha: 0.85)
+                              : const Color(0xFF9c7f49),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -501,6 +866,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildTimeSelection() {
+    final slotCount = _activePricingSlots.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -523,73 +889,84 @@ class _BookingScreenState extends State<BookingScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            childAspectRatio: 2.2,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: _startTimes.length,
-          itemBuilder: (context, index) {
-            final time = _startTimes[index];
-            final isDisabled = index < 2;
-            final isSelected = time == _selectedStartTime;
-
-            return GestureDetector(
-              onTap: isDisabled
-                  ? null
-                  : () {
-                      setState(() {
-                        _selectedStartTime = time;
-                      });
-                    },
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: isSelected && !isDisabled
-                      ? const LinearGradient(
-                          colors: [Color(0xFFf4ab25), Color(0xFFff4d00)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : null,
-                  color: isDisabled
-                      ? Colors.grey[300]
-                      : (isSelected ? null : Colors.white),
-                  borderRadius: BorderRadius.circular(8),
-                  border: !isSelected && !isDisabled
-                      ? Border.all(
-                          color: const Color(0xFFf4ab25).withValues(alpha: 0.3),
-                          width: 1,
-                        )
-                      : null,
-                  boxShadow: isSelected && !isDisabled
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFFf4ab25).withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
+        if (slotCount == 0)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'Hiện chưa có khung giờ khả dụng cho ngày này.',
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF9c7f49),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else
+          Column(
+            children: _activePricingSlots.map((slot) {
+              final key = '${slot['startTime']} - ${slot['endTime']}';
+              final isSelected = key == _selectedStartTime;
+              final price = _toInt(slot['price']);
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedStartTime = key;
+                  });
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: isSelected
+                        ? const LinearGradient(
+                            colors: [Color(0xFFf4ab25), Color(0xFFff4d00)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isSelected ? null : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: isSelected
+                        ? null
+                        : Border.all(color: const Color(0xFFe8dfce), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        size: 18,
+                        color: isSelected ? Colors.white : const Color(0xFFf4ab25),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          key,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? Colors.white : const Color(0xFF1c170d),
                           ),
-                        ]
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  time,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    color: isDisabled
-                        ? Colors.grey[500]
-                        : (isSelected ? Colors.white : const Color(0xFF1c170d)),
+                        ),
+                      ),
+                      Text(
+                        _formatCurrency(price),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected ? Colors.white : const Color(0xFFff4d00),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            );
-          },
-        ),
+              );
+            }).toList(),
+          ),
         const SizedBox(height: 24),
         const Text(
           'THỜI LƯỢNG CHƠI',
@@ -675,17 +1052,17 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
               const SizedBox(width: 8),
               RichText(
-                text: const TextSpan(
+                text: TextSpan(
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF1c170d),
                   ),
                   children: [
-                    TextSpan(text: 'Dự kiến kết thúc: '),
+                    const TextSpan(text: 'Khung giờ đã chọn: '),
                     TextSpan(
-                      text: '19:30',
-                      style: TextStyle(
+                      text: _selectedStartTime ?? '--',
+                      style: const TextStyle(
                         color: Color(0xFFff4d00),
                       ),
                     ),
@@ -878,9 +1255,9 @@ class _BookingScreenState extends State<BookingScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      '375.000đ',
-                      style: TextStyle(
+                    Text(
+                      _formatCurrency(_totalPrice),
+                      style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF1c170d),
@@ -912,23 +1289,46 @@ class _BookingScreenState extends State<BookingScreen> {
                       color: Colors.transparent,
                       child: InkWell(
                         onTap: () {
-                          Navigator.pushNamed(context, '/booking-confirmation');
+                          if (!_canBook) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(_bookBlockReason),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+
+                          final selectedDate = _dates[_selectedDateIndex];
+                          final slot = _selectedPricingSlot;
+                          Navigator.pushNamed(
+                            context,
+                            '/booking-confirmation',
+                            arguments: {
+                              'court': _court,
+                              'selectedSubCourt': _selectedSubCourt,
+                              'selectedDate': selectedDate,
+                              'selectedSlot': slot,
+                              'duration': _selectedDuration,
+                              'totalPrice': _totalPrice,
+                            },
+                          );
                         },
                         borderRadius: BorderRadius.circular(28),
-                        child: const Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'Đặt sân ngay',
-                              style: TextStyle(
+                              _canBook ? 'Đặt sân ngay' : 'Không thể đặt',
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Icon(
-                              Icons.bolt,
+                              _canBook ? Icons.bolt : Icons.block,
                               color: Colors.white,
                               size: 20,
                             ),
