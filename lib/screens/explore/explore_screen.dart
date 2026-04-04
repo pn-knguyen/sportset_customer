@@ -1,6 +1,8 @@
+﻿import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:ui';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -10,207 +12,191 @@ class ExploreScreen extends StatefulWidget {
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
-  String _selectedCategory = '';
+  static const LatLng _defaultCenter = LatLng(10.7769, 106.7009);
+  static const double _nearbyRadiusKm = 15.0;
+
   final TextEditingController _searchController = TextEditingController();
+  final PageController _pageController =
+      PageController(viewportFraction: 0.88);
 
-  String _normalizeText(String? value) {
-    return (value ?? '').trim().toLowerCase();
-  }
+  GoogleMapController? _mapController;
+  LatLng? _userLocation;
+  bool _isLocating = false;
+  int _selectedIndex = -1;
 
-  double _toDouble(dynamic value, {double fallback = 0}) {
-    if (value is num) return value.toDouble();
-    if (value is String) {
-      return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
-    }
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  double _toDouble(dynamic v, {double fallback = 0}) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v.replaceAll(',', '.')) ?? fallback;
     return fallback;
   }
 
-  String _toPrice(dynamic value) {
-    if (value is num) {
-      if (value >= 1000) {
-        return '${(value / 1000).toStringAsFixed(0)}k';
-      }
-      return value.toStringAsFixed(0);
-    }
-    final text = (value ?? '').toString().trim();
-    return text.isEmpty ? 'Liên hệ' : text;
-  }
-
-  String _formatOperatingHours(Map<String, dynamic> data) {
-    final weekdayPricing = data['weekdayPricing'];
-    if (weekdayPricing is List && weekdayPricing.isNotEmpty) {
-      final firstSlot = weekdayPricing.first;
-      if (firstSlot is Map<String, dynamic>) {
-        final start = firstSlot['startTime']?.toString();
-        final end = firstSlot['endTime']?.toString();
-        if ((start ?? '').isNotEmpty && (end ?? '').isNotEmpty) {
-          return '$start - $end';
-        }
-      }
-    }
-    return 'Giờ linh hoạt';
-  }
-
-  Map<String, dynamic> _courtFromFirestore(
-    Map<String, dynamic> data, {
-    required String docId,
-  }) {
-    final detailData = Map<String, dynamic>.from(data);
-    detailData['id'] = docId;
+  Map<String, dynamic> _facilityFromDoc(
+      Map<String, dynamic> data, String docId) {
     return {
       'id': docId,
-      'name': data['name'] ?? 'Chưa có tên sân',
-      'image':
-          data['imageUrl'] ??
-          data['image'] ??
+      'name': data['name']?.toString() ?? 'Chưa có tên cơ sở',
+      'image': data['imageUrl']?.toString() ??
+          data['image']?.toString() ??
           'https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80',
       'rating': _toDouble(data['rating'], fallback: 0),
-      'price': _toPrice(data['pricePerHour'] ?? data['price']),
-      'address': data['address'] ?? 'Chưa cập nhật địa chỉ',
-      'distance': data['distance']?.toString() ?? '-- km',
-      'info': data['facilityName'] ?? _formatOperatingHours(data),
-      'infoIcon': Icons.business,
-      'category': data['sportType']?.toString() ?? '',
-      'detailData': detailData,
+      'address': data['address']?.toString() ?? 'Chưa cập nhật địa chỉ',
+      'openTime': data['openTime']?.toString() ?? '',
+      'closeTime': data['closeTime']?.toString() ?? '',
+      'latitude': (data['latitude'] as num?)?.toDouble(),
+      'longitude': (data['longitude'] as num?)?.toDouble(),
+      'detailData': Map<String, dynamic>.from(data)..['id'] = docId,
     };
   }
 
-  List<String> _buildVisibleSports(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
-    final sports = <String>[];
-    for (final doc in docs) {
-      final data = doc.data();
-      if (data['isVisible'] != true) {
-        continue;
-      }
-      final name = data['name']?.toString().trim() ?? '';
-      if (name.isNotEmpty && !sports.contains(name)) {
-        sports.add(name);
-      }
-    }
-    return sports;
+  double _distanceKm(LatLng a, LatLng b) {
+    const r = 6371.0;
+    final dLat = (b.latitude - a.latitude) * pi / 180;
+    final dLng = (b.longitude - a.longitude) * pi / 180;
+    final sinDLat = sin(dLat / 2);
+    final sinDLng = sin(dLng / 2);
+    final c = 2 *
+        asin(sqrt(sinDLat * sinDLat +
+            cos(a.latitude * pi / 180) *
+                cos(b.latitude * pi / 180) *
+                sinDLng *
+                sinDLng));
+    return r * c;
   }
 
-  void _syncSelectedCategory(List<String> categories) {
-    if (categories.isEmpty) {
-      return;
-    }
-    if (categories.contains(_selectedCategory)) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
+  String _distanceLabel(LatLng? from, double? lat, double? lng) {
+    if (from == null || lat == null || lng == null) return '';
+    final km = _distanceKm(from, LatLng(lat, lng));
+    return km < 1 ? '${(km * 1000).round()} m' : '${km.toStringAsFixed(1)} km';
+  }
+
+  List<Map<String, dynamic>> _filteredVenues(List<Map<String, dynamic>> all) {
+    final query = _searchController.text.trim().toLowerCase();
+    return all.where((v) {
+      if (query.isNotEmpty) {
+        final text = '${v['name']} ${v['address']}'.toLowerCase();
+        if (!text.contains(query)) return false;
+      }
+      final lat = v['latitude'] as double?;
+      final lng = v['longitude'] as double?;
+      if (_userLocation != null && lat != null && lng != null) {
+        final d = _distanceKm(_userLocation!, LatLng(lat, lng));
+        if (d > _nearbyRadiusKm) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  // ── Location ─────────────────────────────────────────────────────────────
+
+  Future<void> _getUserLocation() async {
+    setState(() => _isLocating = true);
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        setState(() => _isLocating = false);
         return;
       }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (!mounted) return;
+      final ll = LatLng(pos.latitude, pos.longitude);
       setState(() {
-        _selectedCategory = categories.first;
+        _userLocation = ll;
+        _isLocating = false;
       });
-    });
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(CameraPosition(target: ll, zoom: 13)),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _isLocating = false);
+    }
   }
 
-  List<Map<String, dynamic>> _buildFilteredVenues(
-    List<Map<String, dynamic>> source,
-    String selectedCategory,
-  ) {
-    final query = _searchController.text.trim().toLowerCase();
-    return source.where((venue) {
-      final venueCategory = _normalizeText(venue['category']?.toString());
-      final categoryMatched =
-          venueCategory == _normalizeText(selectedCategory);
-      final text = '${venue['name'] ?? ''} ${venue['address'] ?? ''}'.toLowerCase();
-      final searchMatched = query.isEmpty || text.contains(query);
-      return categoryMatched && searchMatched;
-    }).toList();
+  void _onMarkerTap(int index, LatLng pos) {
+    setState(() => _selectedIndex = index);
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(CameraPosition(target: pos, zoom: 15)),
+    );
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _onPageChanged(int index, List<Map<String, dynamic>> venues) {
+    setState(() => _selectedIndex = index);
+    final lat = venues[index]['latitude'] as double?;
+    final lng = venues[index]['longitude'] as double?;
+    if (lat != null && lng != null) {
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: LatLng(lat, lng), zoom: 15),
+        ),
+      );
+    }
+  }
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _getUserLocation());
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _pageController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
-            .collection('sports')
-            .where('isVisible', isEqualTo: true)
+            .collection('facilities')
             .snapshots(),
-        builder: (context, sportsSnapshot) {
-          if (sportsSnapshot.connectionState == ConnectionState.waiting &&
-              !sportsSnapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        builder: (context, snap) {
+          final all = snap.data?.docs
+                  .map((d) => _facilityFromDoc(d.data(), d.id))
+                  .toList() ??
+              [];
+          final venues = _filteredVenues(all);
 
-          if (sportsSnapshot.hasError) {
-            return const Center(
-              child: Text('Không thể tải danh mục từ Firebase'),
-            );
-          }
-
-          final categories = _buildVisibleSports(sportsSnapshot.data?.docs ?? []);
-          if (categories.isEmpty) {
-            return const Center(
-              child: Text('Chưa có danh mục nào đang hiển thị'),
-            );
-          }
-
-          _syncSelectedCategory(categories);
-          final selectedCategory = categories.contains(_selectedCategory)
-              ? _selectedCategory
-              : categories.first;
-
-          return Column(
+          return Stack(
             children: [
-              _buildHeader(categories),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('courts')
-                      .where('sportType', isEqualTo: selectedCategory)
-                      .snapshots(),
-                  builder: (context, courtsSnapshot) {
-                    if (courtsSnapshot.connectionState == ConnectionState.waiting &&
-                        !courtsSnapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    if (courtsSnapshot.hasError) {
-                      return const Center(
-                        child: Text('Không thể tải dữ liệu sân từ Firebase'),
-                      );
-                    }
-
-                    final filteredVenues = _buildFilteredVenues(
-                            courtsSnapshot.data?.docs
-                              .map((doc) => _courtFromFirestore(doc.data(), docId: doc.id))
-                              .toList() ??
-                          <Map<String, dynamic>>[],
-                      selectedCategory,
-                    );
-
-                    if (filteredVenues.isEmpty) {
-                      return Center(
-                        child: Text(
-                          'Không có sân cho danh mục $selectedCategory',
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                      itemCount: filteredVenues.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 20),
-                          child: _buildVenueCard(filteredVenues[index]),
-                        );
-                      },
-                    );
-                  },
-                ),
+              _buildMap(venues),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildTopPanel(venues.length),
               ),
+              Positioned(
+                right: 16,
+                bottom: venues.isEmpty ? 24 : 200,
+                child: _buildGpsButton(),
+              ),
+              if (venues.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _buildBottomCards(venues),
+                ),
             ],
           );
         },
@@ -218,527 +204,325 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  Widget _buildHeader(List<String> categories) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8F6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // Logo and user info
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-                          ).createShader(bounds),
-                          child: const Icon(
-                            Icons.sports_soccer,
-                            size: 32,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'SPORTSET',
-                        style: TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Chào buổi sáng,',
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const Text(
-                            'Nam!',
-                            style: TextStyle(
-                              color: Color(0xFF1c170d),
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFFFF9800),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              offset: const Offset(0, 2),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: Image.network(
-                            'https://lh3.googleusercontent.com/aida-public/AB6AXuAT3NjTa30NOo9uOXk0-MFXZAkedViXSrdcLCFJpX8nsF7Y5woFfmz2Caveo1jY78fJNKTNSfxVWGpJh4K59QbfmBIgwvF2ocouc_dAO1mKtpLe106atmLIc9q5JtaEfK_i0y-WfZsJ6hzOkWajGlfSr1Nkt5BgDUZdiA3omHtjJDaeuj5-4IeGSowbjkTA3pXGgAeluVpn_ITg6tTGjCCLhGQV01XecolYkA1OSaIrOk6ibaj4ZRfcGRGb82wscJcTQwlIVuRziSKu',
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+  // ── Map ───────────────────────────────────────────────────────────────────
 
-            // Search bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Container(
+  Widget _buildMap(List<Map<String, dynamic>> venues) {
+    final markers = <Marker>{};
+    for (var i = 0; i < venues.length; i++) {
+      final v = venues[i];
+      final lat = v['latitude'] as double?;
+      final lng = v['longitude'] as double?;
+      if (lat == null || lng == null) continue;
+      final isSelected = i == _selectedIndex;
+      markers.add(Marker(
+        markerId: MarkerId(v['id'] as String),
+        position: LatLng(lat, lng),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          isSelected ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
+        ),
+        zIndex: isSelected ? 1 : 0,
+        onTap: () => _onMarkerTap(i, LatLng(lat, lng)),
+      ));
+    }
+
+    final circles = <Circle>{};
+    if (_userLocation != null) {
+      circles.add(Circle(
+        circleId: const CircleId('radius'),
+        center: _userLocation!,
+        radius: _nearbyRadiusKm * 1000,
+        strokeColor: const Color(0xFFFF9800),
+        strokeWidth: 1,
+        fillColor: const Color(0xFFFF9800).withValues(alpha: 0.06),
+      ));
+    }
+
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: _userLocation ?? _defaultCenter,
+        zoom: 12,
+      ),
+      onMapCreated: (c) => _mapController = c,
+      markers: markers,
+      circles: circles,
+      myLocationEnabled: true,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      onTap: (_) => setState(() => _selectedIndex = -1),
+    );
+  }
+
+  // ── Top panel ─────────────────────────────────────────────────────────────
+
+  Widget _buildTopPanel(int count) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        child: Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(25),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: 16),
+              const Icon(Icons.search, size: 20, color: Colors.grey),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() => _selectedIndex = -1),
+                  decoration: InputDecoration(
+                    hintText: 'Tìm cơ sở, khu vực...',
+                    hintStyle:
+                        TextStyle(color: Colors.grey[400], fontSize: 13),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  style: const TextStyle(
+                      fontSize: 13, color: Color(0xFF1A237E)),
+                ),
+              ),
+              if (_searchController.text.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    _searchController.clear();
+                    setState(() => _selectedIndex = -1);
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child:
+                        Icon(Icons.close, size: 18, color: Colors.grey),
+                  ),
+                ),
+              Container(
+                margin: const EdgeInsets.only(right: 10),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey[100]!),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      offset: const Offset(0, 4),
-                      blurRadius: 20,
-                      spreadRadius: -10,
-                    ),
-                  ],
+                  color: const Color(0xFF0C1C46),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Icon(Icons.search, color: Colors.grey, size: 20),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (_) {
-                          setState(() {});
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'Tìm sân, khu vực...',
-                          hintStyle: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      height: 20,
-                      width: 1,
-                      margin: const EdgeInsets.symmetric(horizontal: 12),
-                      color: Colors.grey[200],
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.tune,
-                          color: Color(0xFFFF9800),
-                          size: 20,
-                        ),
-                        onPressed: () {},
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                    const Icon(Icons.near_me,
+                        size: 11, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$count cơ sở',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-
-            // Category filters
-            SizedBox(
-              height: 60,
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: categories.length,
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  final isSelected = category == _selectedCategory;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          setState(() {
-                            _selectedCategory = category;
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: isSelected
-                                ? const LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xFFFF9800),
-                                      Color(0xFFF44336),
-                                    ],
-                                  )
-                                : null,
-                            color: isSelected ? null : Colors.white,
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.transparent
-                                  : Colors.grey[100]!,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFFFF9800,
-                                      ).withValues(alpha: 0.2),
-                                      offset: const Offset(0, 2),
-                                      blurRadius: 8,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              category,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.grey[600],
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildVenueCard(Map<String, dynamic> venue) {
+  // ── GPS button ─────────────────────────────────────────────────────────────
+
+  Widget _buildGpsButton() {
+    return FloatingActionButton.small(
+      onPressed: _isLocating ? null : _getUserLocation,
+      backgroundColor: Colors.white,
+      elevation: 4,
+      child: _isLocating
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF0C1C46),
+              ),
+            )
+          : const Icon(Icons.my_location,
+              color: Color(0xFF0C1C46), size: 20),
+    );
+  }
+
+  // ── Bottom cards ──────────────────────────────────────────────────────────
+
+  Widget _buildBottomCards(List<Map<String, dynamic>> venues) {
+    return Container(
+      height: 180,
+      padding: const EdgeInsets.only(bottom: 12),
+      child: PageView.builder(
+        controller: _pageController,
+        onPageChanged: (i) => _onPageChanged(i, venues),
+        itemCount: venues.length,
+        itemBuilder: (ctx, i) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: _buildVenueCard(venues[i], i == _selectedIndex),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildVenueCard(Map<String, dynamic> v, bool isSelected) {
+    final distLabel = _distanceLabel(
+      _userLocation,
+      v['latitude'] as double?,
+      v['longitude'] as double?,
+    );
+    final open = v['openTime'] as String;
+    final close = v['closeTime'] as String;
+    final hours =
+        open.isNotEmpty && close.isNotEmpty ? '$open - $close' : 'Liên hệ';
+
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          '/field-detail',
-          arguments: {'court': venue['detailData'] ?? venue},
-        );
-      },
-      child: Container(
+      onTap: () => Navigator.pushNamed(
+        context,
+        '/field-detail',
+        arguments: {'facility': v['detailData'] ?? v},
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.grey[100]!),
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected
+              ? Border.all(color: const Color(0xFFFF9800), width: 2)
+              : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              offset: const Offset(0, 2),
-              blurRadius: 8,
+              color: isSelected
+                  ? const Color(0xFFFF9800).withValues(alpha: 0.3)
+                  : Colors.black.withValues(alpha: 0.12),
+              blurRadius: isSelected ? 16 : 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            // Image with rating and favorite button
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(32),
-                  ),
-                  child: Image.network(
-                    venue['image'],
-                    height: 192,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                // Rating badge
-                Positioned(
-                  top: 16,
-                  left: 16,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              offset: const Offset(0, 2),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.star,
-                              color: Color(0xFFFF9800),
-                              size: 12,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              venue['rating'].toString(),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                // Favorite button
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.favorite_border,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            // Venue details
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name and price
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          venue['name'],
-                          style: const TextStyle(
-                            color: Color(0xFF1A237E),
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            venue['price'],
-                            style: const TextStyle(
-                              color: Color(0xFFFF9800),
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            '/h',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Address
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 14,
-                        color: Colors.grey[500],
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          venue['address'],
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Divider
-                  Divider(color: Colors.grey[50], height: 1),
-                  const SizedBox(height: 16),
-
-                  // Distance, info and details button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.near_me,
-                                size: 14,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                venue['distance'],
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 16),
-                          Row(
-                            children: [
-                              Icon(
-                                venue['infoIcon'],
-                                size: 14,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                venue['info'],
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pushNamed(
-                            context,
-                            '/field-detail',
-                            arguments: {'court': venue['detailData'] ?? venue},
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFFF9800,
-                            ).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'Chi tiết',
-                            style: TextStyle(
-                              color: Color(0xFFFF9800),
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+            // Image
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
               ),
+              child: Image.network(
+                v['image'] as String? ?? '',
+                width: 110,
+                height: 180,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 110,
+                  height: 180,
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.image,
+                      color: Colors.grey, size: 32),
+                ),
+              ),
+            ),
+            // Info
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 14, 10, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      v['name'] as String? ?? '',
+                      style: const TextStyle(
+                        color: Color(0xFF1A237E),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on,
+                            size: 12, color: Colors.grey[500]),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            v['address'] as String? ?? '',
+                            style: TextStyle(
+                                color: Colors.grey[500], fontSize: 11),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time,
+                            size: 12, color: Color(0xFFFF9800)),
+                        const SizedBox(width: 3),
+                        Text(
+                          hours,
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFFFF9800),
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.star,
+                            size: 12, color: Color(0xFFFF9800)),
+                        const SizedBox(width: 3),
+                        Text(
+                          (v['rating'] as double? ?? 0) > 0
+                              ? (v['rating'] as double).toStringAsFixed(1)
+                              : 'Chưa có',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A237E)),
+                        ),
+                        if (distLabel.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          Icon(Icons.near_me,
+                              size: 12, color: Colors.grey[400]),
+                          const SizedBox(width: 3),
+                          Text(distLabel,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[500])),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(Icons.chevron_right,
+                  color: isSelected
+                      ? const Color(0xFFFF9800)
+                      : Colors.grey[400],
+                  size: 22),
             ),
           ],
         ),
