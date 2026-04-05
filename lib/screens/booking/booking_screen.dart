@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -11,8 +12,8 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   int _currentImageIndex = 0;
   int _selectedDateIndex = 0;
-  String? _selectedStartTime;
-  String _selectedDuration = '1 tiếng 30 phút';
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
   String? _selectedSubCourt;
   bool _isFavorite = false;
   bool _didInitFromArgs = false;
@@ -27,8 +28,8 @@ class _BookingScreenState extends State<BookingScreen> {
   late final List<Map<String, dynamic>> _dates = _buildUpcomingDates();
   List<Map<String, dynamic>> _subCourts = [];
   List<Map<String, dynamic>> _activePricingSlots = [];
-
-  final List<String> _durations = ['1 tiếng', '1 tiếng 30 phút', '2 tiếng'];
+  List<Map<String, dynamic>> _bookedSlots = [];
+  bool _isLoadingBookings = false;
 
   @override
   void didChangeDependencies() {
@@ -54,6 +55,7 @@ class _BookingScreenState extends State<BookingScreen> {
       _selectedSubCourt = null;
     }
     _refreshPricingSlots();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBookedSlots());
   }
 
   List<Map<String, dynamic>> _buildUpcomingDates() {
@@ -170,48 +172,154 @@ class _BookingScreenState extends State<BookingScreen> {
 
     if (selected.isNotEmpty) {
       _activePricingSlots = selected;
-      _selectedStartTime =
-          '${selected.first['startTime']} - ${selected.first['endTime']}';
-      return;
-    }
-
-    if (fallbackPrice > 0) {
+    } else if (fallbackPrice > 0) {
       _activePricingSlots = [
-        {
-          'startTime': '05:00',
-          'endTime': '22:00',
-          'price': fallbackPrice,
-        },
+        {'startTime': '05:00', 'endTime': '22:00', 'price': fallbackPrice},
       ];
-      _selectedStartTime = '05:00 - 22:00';
-      return;
+    } else {
+      _activePricingSlots = [];
     }
-
-    _activePricingSlots = [];
-    _selectedStartTime = null;
+    _startTime = null;
+    _endTime = null;
   }
 
-  int _durationMinutes(String duration) {
-    if (duration.contains('30')) {
-      return 90;
-    }
-    if (duration.startsWith('2')) {
-      return 120;
-    }
-    return 60;
+  // ── Time helpers ──────────────────────────────────────────────────────────
+
+  int _toMinutes(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  String _timeLabel(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  TimeOfDay _parseTime(String s) {
+    final parts = s.split(':');
+    if (parts.length < 2) return const TimeOfDay(hour: 0, minute: 0);
+    return TimeOfDay(
+      hour: int.tryParse(parts[0]) ?? 0,
+      minute: int.tryParse(parts[1]) ?? 0,
+    );
   }
 
-  Map<String, dynamic>? get _selectedPricingSlot {
-    if (_selectedStartTime == null) {
-      return null;
+  TimeOfDay get _operatingStart {
+    if (_activePricingSlots.isEmpty) return const TimeOfDay(hour: 5, minute: 0);
+    return _activePricingSlots
+        .map((s) => _parseTime(s['startTime']))
+        .reduce((a, b) => _toMinutes(a) < _toMinutes(b) ? a : b);
+  }
+
+  TimeOfDay get _operatingEnd {
+    if (_activePricingSlots.isEmpty) return const TimeOfDay(hour: 22, minute: 0);
+    return _activePricingSlots
+        .map((s) => _parseTime(s['endTime']))
+        .reduce((a, b) => _toMinutes(a) > _toMinutes(b) ? a : b);
+  }
+
+  List<TimeOfDay> get _timeSlots {
+    final startMin = _toMinutes(_operatingStart);
+    final endMin = _toMinutes(_operatingEnd);
+    final slots = <TimeOfDay>[];
+    for (int m = startMin; m < endMin; m += 30) {
+      slots.add(TimeOfDay(hour: m ~/ 60, minute: m % 60));
     }
-    for (final slot in _activePricingSlots) {
-      final key = '${slot['startTime']} - ${slot['endTime']}';
-      if (key == _selectedStartTime) {
-        return slot;
+    return slots;
+  }
+
+  bool _isStartBooked(TimeOfDay t) {
+    final tMin = _toMinutes(t);
+    for (final b in _bookedSlots) {
+      final bStart = _toMinutes(_parseTime(b['startTime'] as String));
+      final bEnd = _toMinutes(_parseTime(b['endTime'] as String));
+      if (tMin >= bStart && tMin < bEnd) return true;
+    }
+    return false;
+  }
+
+  List<TimeOfDay> _validEndTimes(TimeOfDay start) {
+    final startMin = _toMinutes(start);
+    final endMax = _toMinutes(_operatingEnd);
+    int? nextBookingMin;
+    for (final b in _bookedSlots) {
+      final bStart = _toMinutes(_parseTime(b['startTime'] as String));
+      if (bStart > startMin) {
+        if (nextBookingMin == null || bStart < nextBookingMin) {
+          nextBookingMin = bStart;
+        }
       }
     }
-    return null;
+    final ceiling = nextBookingMin ?? endMax;
+    final slots = <TimeOfDay>[];
+    for (int m = startMin + 30; m <= ceiling; m += 30) {
+      slots.add(TimeOfDay(hour: m ~/ 60, minute: m % 60));
+    }
+    return slots;
+  }
+
+  int _calculatePrice(TimeOfDay start, TimeOfDay end) {
+    final startMin = _toMinutes(start);
+    final endMin = _toMinutes(end);
+    int total = 0;
+    for (final slot in _activePricingSlots) {
+      final slotStart = _toMinutes(_parseTime(slot['startTime']));
+      final slotEnd = _toMinutes(_parseTime(slot['endTime']));
+      final price = _toInt(slot['price']);
+      final overlapStart = startMin < slotStart ? slotStart : startMin;
+      final overlapEnd = endMin > slotEnd ? slotEnd : endMin;
+      if (overlapEnd > overlapStart) {
+        total += (price * (overlapEnd - overlapStart) / 60).round();
+      }
+    }
+    return total;
+  }
+
+  String _durationLabel(TimeOfDay start, TimeOfDay end) {
+    final mins = _toMinutes(end) - _toMinutes(start);
+    final hours = mins ~/ 60;
+    final minutes = mins % 60;
+    if (hours == 0) return '$minutes phút';
+    if (minutes == 0) return '$hours giờ';
+    return '$hours giờ $minutes phút';
+  }
+
+  Future<void> _loadBookedSlots() async {
+    final courtId = _court['id']?.toString() ?? '';
+    if (courtId.isEmpty) return;
+    if (mounted) setState(() => _isLoadingBookings = true);
+    final selectedDate = _dates[_selectedDateIndex];
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('courtId', isEqualTo: courtId)
+          .where('status', whereIn: ['confirmed', 'pending'])
+          .get();
+      final booked = snap.docs
+          .where((doc) {
+            final d = doc.data()['selectedDate'];
+            if (d is! Map) return false;
+            return d['date']?.toString() == selectedDate['date']?.toString() &&
+                d['month']?.toString() == selectedDate['month']?.toString();
+          })
+          .map((doc) {
+            final slot = doc.data()['selectedSlot'];
+            if (slot is Map) {
+              return {
+                'startTime': slot['startTime']?.toString() ?? '',
+                'endTime': slot['endTime']?.toString() ?? '',
+              };
+            }
+            return {'startTime': '', 'endTime': ''};
+          })
+          .where((b) => (b['startTime'] ?? '').isNotEmpty)
+          .toList();
+      if (mounted) {
+        setState(() {
+          _bookedSlots = booked;
+          _isLoadingBookings = false;
+          _startTime = null;
+          _endTime = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingBookings = false);
+    }
   }
 
   String _formatCurrency(int value) {
@@ -227,17 +335,10 @@ class _BookingScreenState extends State<BookingScreen> {
     return '${buffer.toString()}đ';
   }
 
-  int get _totalPrice {
-    final slot = _selectedPricingSlot;
-    if (slot == null) {
-      return 0;
-    }
-    final basePrice = _toInt(slot['price']);
-    if (basePrice <= 0) {
-      return 0;
-    }
-    return (basePrice * _durationMinutes(_selectedDuration) / 60).round();
-  }
+  int get _totalPrice =>
+      (_startTime != null && _endTime != null)
+          ? _calculatePrice(_startTime!, _endTime!)
+          : 0;
 
   bool get _isCourtAvailable => _isAvailableStatus(_court['status']);
 
@@ -251,25 +352,16 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   bool get _canBook {
-    if (!_isCourtAvailable || !_hasAvailableSubCourt) {
-      return false;
-    }
-    if (_hasSubCourtData && _selectedSubCourt == null) {
-      return false;
-    }
-    return _selectedPricingSlot != null;
+    if (!_isCourtAvailable || !_hasAvailableSubCourt) return false;
+    if (_hasSubCourtData && _selectedSubCourt == null) return false;
+    return _startTime != null && _endTime != null;
   }
 
   String get _bookBlockReason {
-    if (!_isCourtAvailable) {
-      return 'Sân hiện không khả dụng để đặt.';
-    }
-    if (!_hasAvailableSubCourt) {
-      return 'Tất cả sân con đã đầy. Vui lòng chọn sân khác.';
-    }
-    if (_selectedPricingSlot == null) {
-      return 'Không có khung giờ hợp lệ để đặt.';
-    }
+    if (!_isCourtAvailable) return 'Sân hiện không khả dụng để đặt.';
+    if (!_hasAvailableSubCourt) return 'Tất cả sân con đã đầy. Vui lòng chọn sân khác.';
+    if (_startTime == null) return 'Vui lòng chọn giờ bắt đầu.';
+    if (_endTime == null) return 'Vui lòng chọn giờ kết thúc.';
     return 'Vui lòng kiểm tra lại thông tin đặt sân.';
   }
 
@@ -788,6 +880,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     _selectedDateIndex = index;
                     _refreshPricingSlots();
                   });
+                  _loadBookedSlots();
                 },
                 child: Container(
                   width: 64,
@@ -866,19 +959,50 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildTimeSelection() {
-    final slotCount = _activePricingSlots.length;
+    final slots = _timeSlots;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Đặt giờ linh hoạt',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1c170d),
-          ),
+        // ── Header ────────────────────────────────────────────────────────
+        Row(
+          children: [
+            const Text(
+              'Chọn giờ',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1c170d),
+              ),
+            ),
+            const Spacer(),
+            if (_isLoadingBookings)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFFf4ab25)),
+              ),
+          ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 10),
+        // Legend
+        Row(
+          children: [
+            _buildLegendChip(Colors.white, const Color(0xFFe8dfce), 'Còn trống'),
+            const SizedBox(width: 10),
+            _buildLegendChip(
+                const Color(0xFFf4ab25).withValues(alpha: 0.2),
+                const Color(0xFFf4ab25),
+                'Đã chọn'),
+            const SizedBox(width: 10),
+            _buildLegendChip(
+                Colors.red.shade50, Colors.red.shade200, 'Đã đặt'),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // ── Start time ────────────────────────────────────────────────────
         const Text(
           'GIỜ BẮT ĐẦU',
           style: TextStyle(
@@ -888,8 +1012,8 @@ class _BookingScreenState extends State<BookingScreen> {
             letterSpacing: 1.2,
           ),
         ),
-        const SizedBox(height: 12),
-        if (slotCount == 0)
+        const SizedBox(height: 10),
+        if (slots.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -900,27 +1024,33 @@ class _BookingScreenState extends State<BookingScreen> {
             child: const Text(
               'Hiện chưa có khung giờ khả dụng cho ngày này.',
               style: TextStyle(
-                fontSize: 13,
-                color: Color(0xFF9c7f49),
-                fontWeight: FontWeight.w600,
-              ),
+                  fontSize: 13,
+                  color: Color(0xFF9c7f49),
+                  fontWeight: FontWeight.w600),
             ),
           )
         else
-          Column(
-            children: _activePricingSlots.map((slot) {
-              final key = '${slot['startTime']} - ${slot['endTime']}';
-              final isSelected = key == _selectedStartTime;
-              final price = _toInt(slot['price']);
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: slots.map((t) {
+              final isBooked = _isStartBooked(t);
+              final isSelected =
+                  _startTime != null && _toMinutes(_startTime!) == _toMinutes(t);
+              final inRange = _startTime != null &&
+                  _endTime != null &&
+                  _toMinutes(t) > _toMinutes(_startTime!) &&
+                  _toMinutes(t) < _toMinutes(_endTime!);
               return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedStartTime = key;
-                  });
-                },
+                onTap: isBooked
+                    ? null
+                    : () => setState(() {
+                          _startTime = t;
+                          _endTime = null;
+                        }),
                 child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
                     gradient: isSelected
                         ? const LinearGradient(
@@ -929,152 +1059,291 @@ class _BookingScreenState extends State<BookingScreen> {
                             end: Alignment.bottomRight,
                           )
                         : null,
-                    color: isSelected ? null : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: isSelected
-                        ? null
-                        : Border.all(color: const Color(0xFFe8dfce), width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.schedule,
-                        size: 18,
-                        color: isSelected ? Colors.white : const Color(0xFFf4ab25),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          key,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : const Color(0xFF1c170d),
-                          ),
-                        ),
-                      ),
-                      Text(
-                        _formatCurrency(price),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected ? Colors.white : const Color(0xFFff4d00),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        const SizedBox(height: 24),
-        const Text(
-          'THỜI LƯỢNG CHƠI',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF9c7f49),
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _durations.map((duration) {
-              final isSelected = duration == _selectedDuration;
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedDuration = duration;
-                  });
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: isSelected
-                        ? const LinearGradient(
-                            colors: [Color(0xFFf4ab25), Color(0xFFff4d00)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : null,
-                    color: isSelected ? null : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: isSelected
-                        ? null
-                        : Border.all(
-                            color: const Color(0xFFf4ab25).withValues(alpha: 0.3),
-                            width: 1,
-                          ),
+                    color: isBooked
+                        ? Colors.red.shade50
+                        : (inRange
+                            ? const Color(0xFFFFE0B2)
+                            : (isSelected ? null : Colors.white)),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isBooked
+                          ? Colors.red.shade200
+                          : (isSelected
+                              ? Colors.transparent
+                              : (inRange
+                                  ? const Color(0xFFf4ab25)
+                                  : const Color(0xFFe8dfce))),
+                    ),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: const Color(0xFFf4ab25).withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
+                              color: const Color(0xFFf4ab25)
+                                  .withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 3),
+                            )
                           ]
                         : null,
                   ),
                   child: Text(
-                    duration,
+                    _timeLabel(t),
                     style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? Colors.white : const Color(0xFF1c170d),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isBooked
+                          ? Colors.red.shade300
+                          : (isSelected
+                              ? Colors.white
+                              : const Color(0xFF1c170d)),
                     ),
                   ),
                 ),
               );
             }).toList(),
           ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFf4ab25).withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: const Color(0xFFf4ab25).withValues(alpha: 0.2),
-              width: 1,
+
+        // ── End time (shown after start is selected) ──────────────────────
+        if (_startTime != null) ...[
+          const SizedBox(height: 24),
+          const Text(
+            'GIỜ KẾT THÚC',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF9c7f49),
+              letterSpacing: 1.2,
             ),
           ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.schedule,
-                color: Color(0xFFf4ab25),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              RichText(
-                text: TextSpan(
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1c170d),
-                  ),
-                  children: [
-                    const TextSpan(text: 'Khung giờ đã chọn: '),
-                    TextSpan(
-                      text: _selectedStartTime ?? '--',
-                      style: const TextStyle(
-                        color: Color(0xFFff4d00),
+          const SizedBox(height: 10),
+          Builder(builder: (_) {
+            final endTs = _validEndTimes(_startTime!);
+            if (endTs.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'Không có giờ kết thúc khả dụng từ giờ này.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF9c7f49)),
+                ),
+              );
+            }
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: endTs.map((t) {
+                final isSelected = _endTime != null &&
+                    _toMinutes(_endTime!) == _toMinutes(t);
+                return GestureDetector(
+                  onTap: () => setState(() => _endTime = t),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 9),
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? const LinearGradient(
+                              colors: [Color(0xFFf4ab25), Color(0xFFff4d00)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: isSelected ? null : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isSelected
+                            ? Colors.transparent
+                            : const Color(0xFFe8dfce),
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFFf4ab25)
+                                    .withValues(alpha: 0.3),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              )
+                            ]
+                          : null,
+                    ),
+                    child: Text(
+                      _timeLabel(t),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white
+                            : const Color(0xFF1c170d),
                       ),
                     ),
-                  ],
+                  ),
+                );
+              }).toList(),
+            );
+          }),
+        ],
+
+        // ── Booking summary card ──────────────────────────────────────────
+        if (_startTime != null && _endTime != null) ...[
+          const SizedBox(height: 20),
+          _buildBookingSummaryCard(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildLegendChip(Color bg, Color border, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: border),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(label,
+            style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+      ],
+    );
+  }
+
+  Widget _buildBookingSummaryCard() {
+    final duration = _durationLabel(_startTime!, _endTime!);
+    final total = _totalPrice;
+    final startMin = _toMinutes(_startTime!);
+    final endMin = _toMinutes(_endTime!);
+
+    // Build price breakdown per pricing slot
+    final breakdown = <Map<String, dynamic>>[];
+    for (final slot in _activePricingSlots) {
+      final slotStart = _toMinutes(_parseTime(slot['startTime']));
+      final slotEnd = _toMinutes(_parseTime(slot['endTime']));
+      final price = _toInt(slot['price']);
+      final overlapStart = startMin < slotStart ? slotStart : startMin;
+      final overlapEnd = endMin > slotEnd ? slotEnd : endMin;
+      if (overlapEnd > overlapStart) {
+        final mins = overlapEnd - overlapStart;
+        breakdown.add({
+          'label': '${slot['startTime']} - ${slot['endTime']}',
+          'mins': mins,
+          'amount': (price * mins / 60).round(),
+        });
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: const Color(0xFFf4ab25).withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Time range + duration badge
+          Row(
+            children: [
+              const Icon(Icons.schedule,
+                  color: Color(0xFFf4ab25), size: 18),
+              const SizedBox(width: 8),
+              Text(
+                '${_timeLabel(_startTime!)}  →  ${_timeLabel(_endTime!)}',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1c170d),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color:
+                      const Color(0xFFf4ab25).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  duration,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFff4d00),
+                  ),
                 ),
               ),
             ],
           ),
-        ),
-      ],
+          // Price breakdown (only when multiple pricing slots are crossed)
+          if (breakdown.length > 1) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1, color: Color(0xFFFFE0B2)),
+            const SizedBox(height: 8),
+            ...breakdown.map((item) {
+              final h = (item['mins'] as int) ~/ 60;
+              final m = (item['mins'] as int) % 60;
+              final timeStr =
+                  '${h > 0 ? "${h}h " : ""}${m > 0 ? "${m}ph" : ""}';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Text(item['label'] as String,
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey[600])),
+                    const SizedBox(width: 6),
+                    Text('($timeStr)',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey[500])),
+                    const Spacer(),
+                    Text(
+                      _formatCurrency(item['amount'] as int),
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey[700]),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const Divider(height: 1, color: Color(0xFFFFE0B2)),
+            const SizedBox(height: 6),
+          ] else
+            const SizedBox(height: 10),
+          // Total
+          Row(
+            children: [
+              const Text(
+                'Tổng cộng',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1c170d),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _formatCurrency(total),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFff4d00),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
+
 
   Widget _buildReviews() {
     return Column(
@@ -1300,7 +1569,6 @@ class _BookingScreenState extends State<BookingScreen> {
                           }
 
                           final selectedDate = _dates[_selectedDateIndex];
-                          final slot = _selectedPricingSlot;
                           Navigator.pushNamed(
                             context,
                             '/booking-confirmation',
@@ -1308,8 +1576,12 @@ class _BookingScreenState extends State<BookingScreen> {
                               'court': _court,
                               'selectedSubCourt': _selectedSubCourt,
                               'selectedDate': selectedDate,
-                              'selectedSlot': slot,
-                              'duration': _selectedDuration,
+                              'selectedSlot': {
+                                'startTime': _timeLabel(_startTime!),
+                                'endTime': _timeLabel(_endTime!),
+                                'price': _totalPrice,
+                              },
+                              'duration': _durationLabel(_startTime!, _endTime!),
                               'totalPrice': _totalPrice,
                             },
                           );

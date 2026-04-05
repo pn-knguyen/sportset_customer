@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">sportset_customer</string>
+    <string name="facebook_app_id">1290902685817807</string>
+    <string name="fb_login_protocol_scheme">fb1290902685817807</string>
+    <string name="facebook_client_token">***FB_CLIENT_TOKEN_REMOVED***</string>
+</resources>

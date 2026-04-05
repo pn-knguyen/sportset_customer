@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,6 +20,205 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _isLoading = false;
+  bool _isGoogleLoading = false;
+  bool _isFacebookLoading = false;
+  String? _fullNameError;
+  String? _phoneError;
+  String? _emailError;
+  String? _passwordError;
+  String? _confirmPasswordError;
+
+  Future<void> _register() async {
+    setState(() {
+      _fullNameError = null;
+      _phoneError = null;
+      _emailError = null;
+      _passwordError = null;
+      _confirmPasswordError = null;
+    });
+
+    final fullName = _fullNameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    bool hasError = false;
+    if (fullName.isEmpty) {
+      setState(() => _fullNameError = 'Vui lòng nhập họ và tên.');
+      hasError = true;
+    }
+    if (phone.isEmpty) {
+      setState(() => _phoneError = 'Vui lòng nhập số điện thoại.');
+      hasError = true;
+    }
+    if (email.isEmpty) {
+      setState(() => _emailError = 'Vui lòng nhập email.');
+      hasError = true;
+    }
+    if (password.isEmpty) {
+      setState(() => _passwordError = 'Vui lòng nhập mật khẩu.');
+      hasError = true;
+    } else if (password.length < 6) {
+      setState(() => _passwordError = 'Mật khẩu phải có ít nhất 6 ký tự.');
+      hasError = true;
+    }
+    if (confirmPassword.isEmpty) {
+      setState(() => _confirmPasswordError = 'Vui lòng nhập lại mật khẩu.');
+      hasError = true;
+    } else if (password != confirmPassword) {
+      setState(() => _confirmPasswordError = 'Mật khẩu nhập lại không khớp.');
+      hasError = true;
+    }
+    if (hasError) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      await credential.user?.updateDisplayName(fullName);
+
+      await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(credential.user!.uid)
+          .set({
+        'uid': credential.user!.uid,
+        'fullName': fullName,
+        'phone': phone,
+        'email': email,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await credential.user?.sendEmailVerification();
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/email-verification');
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'email-already-in-use':
+          setState(() => _emailError = 'Email này đã được sử dụng.');
+          break;
+        case 'invalid-email':
+          setState(() => _emailError = 'Email không hợp lệ.');
+          break;
+        case 'weak-password':
+          setState(() => _passwordError = 'Mật khẩu quá yếu.');
+          break;
+        default:
+          _showSnackBar('Đăng ký thất bại. Vui lòng thử lại.');
+      }
+    } catch (_) {
+      _showSnackBar('Đã có lỗi xảy ra. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isGoogleLoading = true);
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return;
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = userCredential.user!;
+
+      final docRef = FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid);
+      final doc = await docRef.get();
+      if (!doc.exists) {
+        await docRef.set({
+          'uid': user.uid,
+          'fullName': user.displayName ?? '',
+          'email': user.email ?? '',
+          'phone': '',
+          'photoUrl': user.photoURL ?? '',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/main');
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(
+          e.message ?? 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+    } catch (_) {
+      _showSnackBar('Đăng nhập Google thất bại. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
+    }
+  }
+
+  Future<void> _signInWithFacebook() async {
+    setState(() => _isFacebookLoading = true);
+    try {
+      final loginResult = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (loginResult.status == LoginStatus.cancelled) return;
+      if (loginResult.status != LoginStatus.success) {
+        _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        return;
+      }
+
+      final accessToken = loginResult.accessToken!;
+      final credential =
+          FacebookAuthProvider.credential(accessToken.tokenString);
+
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = userCredential.user!;
+
+      final docRef =
+          FirebaseFirestore.instance.collection('customers').doc(user.uid);
+      final doc = await docRef.get();
+      if (!doc.exists) {
+        final userData = await FacebookAuth.instance.getUserData(
+          fields: 'name,email,picture.width(200)',
+        );
+        await docRef.set({
+          'uid': user.uid,
+          'fullName': userData['name'] ?? user.displayName ?? '',
+          'email': userData['email'] ?? user.email ?? '',
+          'phone': '',
+          'photoUrl': user.photoURL ?? '',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/main');
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(
+          e.message ?? 'Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+    } catch (_) {
+      _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isFacebookLoading = false);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFF44336),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -175,6 +378,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           label: 'Họ và tên',
           hint: 'Nhập họ và tên của bạn',
           controller: _fullNameController,
+          errorText: _fullNameError,
         ),
         const SizedBox(height: 10),
         // Phone input
@@ -183,6 +387,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           hint: 'Nhập số điện thoại',
           controller: _phoneController,
           keyboardType: TextInputType.phone,
+          errorText: _phoneError,
         ),
         const SizedBox(height: 10),
         // Email input
@@ -191,6 +396,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           hint: 'Nhập email của bạn',
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
+          errorText: _emailError,
         ),
         const SizedBox(height: 10),
         // Password input
@@ -199,6 +405,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           hint: 'Tạo mật khẩu',
           controller: _passwordController,
           isVisible: _isPasswordVisible,
+          errorText: _passwordError,
           onToggle: () {
             setState(() {
               _isPasswordVisible = !_isPasswordVisible;
@@ -212,6 +419,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           hint: 'Nhập lại mật khẩu',
           controller: _confirmPasswordController,
           isVisible: _isConfirmPasswordVisible,
+          errorText: _confirmPasswordError,
           onToggle: () {
             setState(() {
               _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
@@ -237,10 +445,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             ),
             child: ElevatedButton(
-              onPressed: () {
-                // Handle register
-                Navigator.pushReplacementNamed(context, '/main');
-              },
+              onPressed: _isLoading ? null : _register,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
@@ -248,14 +453,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   borderRadius: BorderRadius.circular(24),
                 ),
               ),
-              child: const Text(
-                'Đăng ký',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Text(
+                      'Đăng ký',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -267,6 +481,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required String hint,
     required TextEditingController controller,
     TextInputType? keyboardType,
+    String? errorText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +502,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(
+              color: errorText != null
+                  ? const Color(0xFFF44336)
+                  : const Color(0xFFE2E8F0),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.03),
@@ -314,6 +533,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 4),
+            child: Text(
+              errorText,
+              style: const TextStyle(
+                color: Color(0xFFF44336),
+                fontSize: 12,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -324,6 +554,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required TextEditingController controller,
     required bool isVisible,
     required VoidCallback onToggle,
+    String? errorText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,7 +575,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(
+              color: errorText != null
+                  ? const Color(0xFFF44336)
+                  : const Color(0xFFE2E8F0),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.03),
@@ -378,6 +613,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 4),
+            child: Text(
+              errorText,
+              style: const TextStyle(
+                color: Color(0xFFF44336),
+                fontSize: 12,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -430,9 +676,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             ),
             child: ElevatedButton(
-              onPressed: () {
-                // Handle Google signup
-              },
+              onPressed: _isGoogleLoading ? null : _signInWithGoogle,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF0F172A),
@@ -441,20 +685,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   borderRadius: BorderRadius.circular(22),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildGoogleLogo(),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Google',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+              child: _isGoogleLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Color(0xFFFF9800),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildGoogleLogo(),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Google',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),
@@ -473,9 +726,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             ),
             child: ElevatedButton(
-              onPressed: () {
-                // Handle Facebook signup
-              },
+              onPressed: _isFacebookLoading ? null : _signInWithFacebook,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1877F2),
                 foregroundColor: Colors.white,
@@ -484,29 +735,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   borderRadius: BorderRadius.circular(22),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.facebook,
-                      color: Colors.white,
-                      size: 20,
+              child: _isFacebookLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.facebook,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Facebook',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Facebook',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),

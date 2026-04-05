@@ -392,8 +392,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return GestureDetector(
       onTap: () => Navigator.pushNamed(
         context,
-        '/field-detail',
-        arguments: {'facility': v['detailData'] ?? v},
+        '/venue-detail',
+        arguments: v['id'] as String,
       ),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

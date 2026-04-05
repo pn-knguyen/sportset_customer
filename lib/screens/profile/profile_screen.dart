@@ -1,7 +1,72 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String _displayName = '';
+  String _phoneNumber = '';
+  String _email = '';
+  String _photoUrl = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+      if (mounted) {
+        final data = doc.data() ?? {};
+        setState(() {
+          _displayName = data['fullName']?.toString() ??
+              user.displayName ??
+              'Người dùng';
+          _phoneNumber = data['phone']?.toString() ?? '';
+          _email = data['email']?.toString() ?? user.email ?? '';
+          _photoUrl = data['photoUrl']?.toString() ??
+              user.photoURL ??
+              '';
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        final user = FirebaseAuth.instance.currentUser;
+        setState(() {
+          _displayName = user?.displayName ?? 'Người dùng';
+          _email = user?.email ?? '';
+          _photoUrl = user?.photoURL ?? '';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _signOut() async {
+    await GoogleSignIn().signOut();
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +99,10 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildProfileHeader() {
+    final initials = _displayName.isNotEmpty
+        ? _displayName.trim()[0].toUpperCase()
+        : '?';
+
     return Column(
       children: [
         Container(
@@ -61,27 +130,35 @@ class ProfileScreen extends StatelessWidget {
             padding: const EdgeInsets.all(3),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(48),
-              child: Image.network(
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuDwV0QbGCGwHES5k24WCa95WBCzbPS9TVh09FU1ttFMoyb5Y8ufl0hip08Or6kpsxleK3IibTD6Mz60IbfnN9onGlJBPEwBtUDsKqKer6pBWQEuwW_knEootxO3reXaFSxqwusCvPFK7W_X9N7gh0T4y82NbXlf1BnIymmDm8PxhzDJLFeTtF8VmlKz115WTIqZ8JbrhCa0zUdf6PBKtya_R8WQos3O3K236YGgy-udxijgyJg75nNiDPvp_Cusy8WzWeFThlcow9I1',
-                width: 72,
-                height: 72,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 72,
-                    height: 72,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.person, size: 36),
-                  );
-                },
-              ),
+              child: _isLoading
+                  ? Container(
+                      width: 72,
+                      height: 72,
+                      color: Colors.grey.shade100,
+                      child: const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  : (_photoUrl.isNotEmpty
+                      ? Image.network(
+                          _photoUrl,
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildInitialsAvatar(initials),
+                        )
+                      : _buildInitialsAvatar(initials)),
             ),
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'Nguyễn Văn Nam',
-          style: TextStyle(
+        Text(
+          _isLoading ? '' : _displayName,
+          style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
             color: Color(0xFF1A237E),
@@ -89,15 +166,33 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
-          '090 ••• ••89',
-          style: TextStyle(
+        Text(
+          _isLoading ? '' : (_phoneNumber.isNotEmpty ? _phoneNumber : _email),
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: Colors.grey,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInitialsAvatar(String initials) {
+    return Container(
+      width: 72,
+      height: 72,
+      color: const Color(0xFFFF9800),
+      child: Center(
+        child: Text(
+          initials,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
     );
   }
 
@@ -139,7 +234,7 @@ class ProfileScreen extends StatelessWidget {
                 iconColor: const Color(0xFF1A237E),
                 backgroundColor: const Color(0xFF1A237E).withValues(alpha: 0.1),
                 title: 'Chỉnh sửa thông tin',
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/edit-profile'),
                 showDivider: true,
               ),
               _buildMenuItem(
@@ -349,7 +444,7 @@ class ProfileScreen extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // TODO: Handle logout
+              _signOut();
             },
             child: const Text(
               'Đăng xuất',

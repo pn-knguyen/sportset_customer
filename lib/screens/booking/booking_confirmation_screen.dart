@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
   const BookingConfirmationScreen({super.key});
@@ -259,6 +260,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     final finalPayable = _finalPayableAmount();
 
     final bookingPayload = <String, dynamic>{
+      'userId': FirebaseAuth.instance.currentUser?.uid ?? '',
       'courtId': courtId,
       'courtName': _courtName(),
       'courtAddress': _courtAddress(),

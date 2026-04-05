@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -9,6 +10,43 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String _displayName = '';
+  String _photoUrl = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Ưu tiên lấy từ Firestore
+    final doc = await FirebaseFirestore.instance
+        .collection('customers')
+        .doc(user.uid)
+        .get();
+
+    if (!mounted) return;
+    final data = doc.data();
+    setState(() {
+      _displayName = (data?['fullName'] as String? ?? '').trim().isNotEmpty
+          ? (data!['fullName'] as String).trim()
+          : (user.displayName ?? '').trim();
+      _photoUrl = (data?['photoUrl'] as String? ?? '').trim().isNotEmpty
+          ? (data!['photoUrl'] as String).trim()
+          : (user.photoURL ?? '');
+    });
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Chào buổi sáng,';
+    if (hour < 18) return 'Chào buổi chiều,';
+    return 'Chào buổi tối,';
+  }
   String _normalizeText(String? value) {
     return (value ?? '').trim().toLowerCase();
   }
@@ -237,11 +275,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             Row(
               children: [
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'Chào buổi sáng,',
+                      _getGreeting(),
                       style: TextStyle(
                         color: Colors.grey,
                         fontSize: 12,
@@ -249,8 +287,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     Text(
-                      'Nam!',
-                      style: TextStyle(
+                      _displayName.isEmpty ? 'Bạn' : _displayName,
+                      style: const TextStyle(
                         color: Color(0xFF1c170d),
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -276,16 +314,34 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   child: ClipOval(
-                    child: Image.network(
-                      'https://lh3.googleusercontent.com/aida-public/AB6AXuCKRmp4nEVBG-6uZ-8CWBD4oUrLxTb23Yg-C-i_07c59-76-Z848HbHMok4RKJY3bNQu34c_sal_V2_gKYpo_UVyKgjJ_wleR_H870lmfJZEwHox2Brd0o4fH4KSrJWIoR2hwWfRI1cNkU95hWSboXt_sjVL6TohZZ2O9SfKvxe0_Ej8hm_MWL6V_Y0-YFRZYimbOEoK60_5vS_Z3qdpbYV48_yQHyIMTxiBBeUx2NdjIPTde0xIxHMgef_w4piWWcxIVIKoBasGDoL',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey.shade300,
-                          child: const Icon(Icons.person, color: Colors.white),
-                        );
-                      },
-                    ),
+                    child: _photoUrl.isNotEmpty
+                        ? Image.network(
+                            _photoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade300,
+                                child: const Icon(
+                                    Icons.person,
+                                    color: Colors.white),
+                              );
+                            },
+                          )
+                        : Container(
+                            color: const Color(0xFFFF9800),
+                            child: Center(
+                              child: Text(
+                                _displayName.isNotEmpty
+                                    ? _displayName[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
                   ),
                 ),
               ],

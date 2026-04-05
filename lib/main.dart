@@ -13,6 +13,8 @@ import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/otp_verification_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/auth/reset_password_success_screen.dart';
+import 'screens/auth/email_verification_screen.dart';
+import 'screens/auth/email_verified_screen.dart';
 
 // Home and navigation
 import 'screens/home/home_screen.dart';
@@ -23,6 +25,7 @@ import 'screens/profile/profile_screen.dart';
 
 // Field and booking
 import 'screens/field_detail/field_detail_screen.dart';
+import 'screens/explore/venue_detail_screen.dart';
 import 'screens/booking/booking_screen.dart';
 import 'screens/booking/booking_confirmation_screen.dart';
 import 'screens/booking/voucher_selection_screen.dart';
@@ -81,6 +84,8 @@ class SportsetApp extends StatelessWidget {
         '/otp-verification': (context) => const OtpVerificationScreen(),
         '/reset-password': (context) => const ResetPasswordScreen(),
         '/reset-password-success': (context) => const ResetPasswordSuccessScreen(),
+        '/email-verification': (context) => const EmailVerificationScreen(),
+        '/email-verified': (context) => const EmailVerifiedScreen(),
         
         // Main app with bottom navigation
         '/main': (context) => const MainNavigationScreen(),
@@ -93,6 +98,7 @@ class SportsetApp extends StatelessWidget {
         '/profile': (context) => const ProfileScreen(),
         
         // Field and booking flow
+        '/venue-detail': (context) => const VenueDetailScreen(),
         '/field-detail': (context) => const FieldDetailScreen(),
         '/booking': (context) => const BookingScreen(),
         '/booking-confirmation': (context) => const BookingConfirmationScreen(),

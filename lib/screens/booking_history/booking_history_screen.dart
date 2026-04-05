@@ -1,5 +1,7 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
   const BookingHistoryScreen({super.key});
@@ -11,11 +13,16 @@ class BookingHistoryScreen extends StatefulWidget {
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   int _selectedTab = 0; // 0: Sắp tới, 1: Lịch sử
 
-  final Stream<QuerySnapshot<Map<String, dynamic>>> _bookingsStream =
-      FirebaseFirestore.instance
-          .collection('bookings')
-          .orderBy('createdAt', descending: true)
-          .snapshots();
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _bookingsStream {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) {
+      return const Stream.empty();
+    }
+    return FirebaseFirestore.instance
+        .collection('bookings')
+        .where('userId', isEqualTo: uid)
+        .snapshots();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +62,15 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
                 final bookings = (snapshot.data?.docs ?? [])
                     .map(_mapBooking)
-                    .toList();
+                    .toList()
+                  ..sort((a, b) {
+                    final aTime = (a['dateTime'] as DateTime?);
+                    final bTime = (b['dateTime'] as DateTime?);
+                    if (aTime == null && bTime == null) return 0;
+                    if (aTime == null) return 1;
+                    if (bTime == null) return -1;
+                    return bTime.compareTo(aTime);
+                  });
 
                 final upcomingBookings = bookings
                     .where(_isUpcomingBooking)
@@ -511,26 +526,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                                 )
                               : <String, dynamic>{};
 
-                      Navigator.pushNamed(
-                        context,
-                        '/booking-success',
-                        arguments: {
-                          'bookingId': (booking['id'] ?? '').toString(),
-                          'court': {
-                            'name': (booking['name'] ?? '').toString(),
-                            'sportType': (booking['sportType'] ?? '').toString(),
-                          },
-                          'selectedDate': selectedDate,
-                          'selectedSlot': selectedSlot,
-                          'selectedSubCourt':
-                              (booking['subCourtName'] ?? '').toString(),
-                          'duration': (booking['duration'] ?? '').toString(),
-                          'totalPrice': _toInt(booking['totalPrice']),
-                          'paymentMethodLabel':
-                              (booking['paymentMethodLabel'] ?? 'Chưa chọn')
-                                  .toString(),
-                        },
-                      );
+                      _showQRBottomSheet(context, booking);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -564,6 +560,129 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showQRBottomSheet(BuildContext context, Map<String, dynamic> booking) {
+    final bookingId = (booking['id'] ?? '').toString();
+    final name = (booking['name'] ?? 'Sân thể thao').toString();
+    final date = (booking['date'] ?? '').toString();
+    final time = (booking['time'] ?? '').toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // drag handle
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Mã QR đặt sân',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A237E),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 20, color: Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: QrImageView(
+                data: bookingId.isNotEmpty ? bookingId : 'SPORTSET-BOOKING',
+                version: QrVersions.auto,
+                size: 200,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: Color(0xFF1A237E),
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: Color(0xFF1A237E),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A237E),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (date.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                date,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            if (time.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                time,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            if (bookingId.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Mã đặt: $bookingId',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

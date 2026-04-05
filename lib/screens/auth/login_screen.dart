@@ -1,5 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,6 +16,178 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
+  bool _isGoogleLoading = false;
+  bool _isFacebookLoading = false;
+  String? _emailError;
+  String? _passwordError;
+
+  Future<void> _login() async {
+    setState(() {
+      _emailError = null;
+      _passwordError = null;
+    });
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    bool hasError = false;
+    if (email.isEmpty) {
+      setState(() => _emailError = 'Vui lòng nhập email.');
+      hasError = true;
+    }
+    if (password.isEmpty) {
+      setState(() => _passwordError = 'Vui lòng nhập mật khẩu.');
+      hasError = true;
+    }
+    if (hasError) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final credential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      if (credential.user?.emailVerified != true) {
+        await FirebaseAuth.instance.signOut();
+        setState(() => _emailError =
+            'Email chưa được xác thực. Vui lòng kiểm tra hộp thư và xác thực tài khoản.');
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/main');
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'user-not-found':
+        case 'invalid-credential':
+        case 'INVALID_LOGIN_CREDENTIALS':
+          setState(() => _emailError = 'Email hoặc mật khẩu không đúng.');
+          break;
+        case 'wrong-password':
+          setState(() => _passwordError = 'Mật khẩu không đúng.');
+          break;
+        case 'invalid-email':
+          setState(() => _emailError = 'Email không hợp lệ.');
+          break;
+        case 'user-disabled':
+          setState(() => _emailError = 'Tài khoản này đã bị khóa.');
+          break;
+        default:
+          setState(() => _emailError = 'Đăng nhập thất bại. Vui lòng thử lại.');
+      }
+    } catch (_) {
+      setState(() => _emailError = 'Đã có lỗi xảy ra. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isGoogleLoading = true);
+    try {
+      final _googleSignIn = GoogleSignIn();
+      await _googleSignIn.signOut(); // force account picker
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return; // user cancelled
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = userCredential.user!;
+
+      // Create Firestore document if first time (new user).
+      final docRef = FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid);
+      final doc = await docRef.get();
+      if (!doc.exists) {
+        await docRef.set({
+          'uid': user.uid,
+          'fullName': user.displayName ?? '',
+          'email': user.email ?? '',
+          'phone': '',
+          'photoUrl': user.photoURL ?? '',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/main');
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(
+          e.message ?? 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+    } catch (_) {
+      _showSnackBar('Đăng nhập Google thất bại. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
+    }
+  }
+
+  Future<void> _loginWithFacebook() async {
+    setState(() => _isFacebookLoading = true);
+    try {
+      final loginResult = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (loginResult.status == LoginStatus.cancelled) return;
+      if (loginResult.status != LoginStatus.success) {
+        _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        return;
+      }
+
+      final accessToken = loginResult.accessToken!;
+      final credential =
+          FacebookAuthProvider.credential(accessToken.tokenString);
+
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = userCredential.user!;
+
+      final docRef =
+          FirebaseFirestore.instance.collection('customers').doc(user.uid);
+      final doc = await docRef.get();
+      if (!doc.exists) {
+        final userData = await FacebookAuth.instance.getUserData(
+          fields: 'name,email,picture.width(200)',
+        );
+        await docRef.set({
+          'uid': user.uid,
+          'fullName': userData['name'] ?? user.displayName ?? '',
+          'email': userData['email'] ?? user.email ?? '',
+          'phone': '',
+          'photoUrl': user.photoURL ?? '',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/main');
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(
+          e.message ?? 'Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+    } catch (_) {
+      _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isFacebookLoading = false);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFF44336),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -175,7 +351,10 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(
+              color: _emailError != null
+                  ? const Color(0xFFF44336)
+                  : const Color(0xFFE2E8F0)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.03),
@@ -201,6 +380,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+        if (_emailError != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 4),
+            child: Text(
+              _emailError!,
+              style: const TextStyle(
+                color: Color(0xFFF44336),
+                fontSize: 12,
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         // Password input
         const Padding(
@@ -219,7 +409,10 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(
+              color: _passwordError != null
+                  ? const Color(0xFFF44336)
+                  : const Color(0xFFE2E8F0)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.03),
@@ -259,6 +452,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+        if (_passwordError != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 4),
+            child: Text(
+              _passwordError!,
+              style: const TextStyle(
+                color: Color(0xFFF44336),
+                fontSize: 12,
+              ),
+            ),
+          ),
         // Forgot password link
         Align(
           alignment: Alignment.centerRight,
@@ -298,10 +502,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
           child: ElevatedButton(
-            onPressed: () {
-              // Navigate to main screen after login
-              Navigator.pushReplacementNamed(context, '/main');
-            },
+            onPressed: _isLoading ? null : _login,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.transparent,
               shadowColor: Colors.transparent,
@@ -309,14 +510,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 borderRadius: BorderRadius.circular(28),
               ),
             ),
-            child: const Text(
-              'Đăng nhập',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : const Text(
+                    'Đăng nhập',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
         ),
       ],
@@ -375,23 +585,32 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
-                // Handle Google login
-              },
+              onTap: _isGoogleLoading ? null : _loginWithGoogle,
               borderRadius: BorderRadius.circular(24),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildGoogleLogo(),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Tiếp tục với Google',
-                    style: TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                  if (_isGoogleLoading)
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Color(0xFFFF9800),
+                      ),
+                    )
+                  else ...[
+                    _buildGoogleLogo(),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Tiếp tục với Google',
+                      style: TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -416,27 +635,32 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
-                // Handle Facebook login
-              },
+              onTap: _isFacebookLoading ? null : _loginWithFacebook,
               borderRadius: BorderRadius.circular(24),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.facebook,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Tiếp tục với Facebook',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                  if (_isFacebookLoading)
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  else ...[
+                    const Icon(Icons.facebook, color: Colors.white, size: 24),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Tiếp tục với Facebook',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
