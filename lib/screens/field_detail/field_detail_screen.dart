@@ -303,13 +303,14 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     }
     if (normalized.contains('gui xe') ||
         normalized.contains('bai xe') ||
+        normalized.contains('do xe') ||
         normalized.contains('parking')) {
       return Icons.local_parking;
     }
-    if (normalized.contains('nuoc') ||
-        normalized.contains('nuoc uong') ||
+    if (normalized.contains('nuoc uong') ||
         normalized.contains('giai khat') ||
-        normalized.contains('drink')) {
+        normalized.contains('drink') ||
+        normalized.contains('nuoc')) {
       return Icons.local_drink;
     }
     if (normalized.contains('tam') || normalized.contains('shower')) {
@@ -322,13 +323,13 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     }
     if (normalized.contains('wc') ||
         normalized.contains('ve sinh') ||
-        normalized.contains('toilet')) {
+        normalized.contains('toilet') ||
+        normalized.contains('nha ve sinh')) {
       return Icons.wc;
     }
-    if (normalized.contains('nha ve sinh')) {
-      return Icons.wc;
-    }
-    if (normalized.contains('den') || normalized.contains('lighting')) {
+    if (normalized.contains('den') ||
+        normalized.contains('chieu sang') ||
+        normalized.contains('lighting')) {
       return Icons.lightbulb;
     }
     if (normalized.contains('huan luyen') ||
@@ -342,10 +343,26 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
         normalized.contains('thue')) {
       return Icons.sports;
     }
-    if (normalized.contains('bao ho') || normalized.contains('y te')) {
+    if (normalized.contains('bao ho') ||
+        normalized.contains('y te') ||
+        normalized.contains('first aid')) {
       return Icons.health_and_safety;
     }
-
+    if (normalized.contains('khan dai') ||
+        normalized.contains('tribune') ||
+        normalized.contains('grandstand')) {
+      return Icons.stadium;
+    }
+    if (normalized.contains('can tin') ||
+        normalized.contains('canteen') ||
+        normalized.contains('an uong') ||
+        normalized.contains('nha hang') ||
+        normalized.contains('restaurant')) {
+      return Icons.restaurant;
+    }
+    if (normalized.contains('xe') || normalized.contains('parking')) {
+      return Icons.local_parking;
+    }
     return Icons.check_circle;
   }
 
@@ -965,7 +982,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             color: Color(0xFF1A1C1C),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,

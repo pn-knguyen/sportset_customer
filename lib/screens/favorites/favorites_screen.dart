@@ -93,6 +93,29 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         .delete();
   }
 
+  Future<void> _navigateToBooking(String courtId) async {
+    if (courtId.isEmpty) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('courts')
+          .doc(courtId)
+          .get();
+      if (!mounted) return;
+      final Map<String, dynamic> courtData = doc.exists && doc.data() != null
+          ? Map<String, dynamic>.from(doc.data()!)
+          : {};
+      courtData['id'] = courtId;
+      Navigator.pushNamed(context, '/booking', arguments: {'court': courtData});
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.pushNamed(
+        context,
+        '/booking',
+        arguments: {'court': <String, dynamic>{'id': courtId}},
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -152,7 +175,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             ),
                             Expanded(
                               child: ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                                 itemCount: docs.length,
                                 itemBuilder: (context, index) {
                                   final data = docs[index].data();
@@ -236,11 +259,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final distLabel = _calcDistanceLabel(facilityId);
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(
-        context,
-        '/field-detail',
-        arguments: {'court': venue..['id'] = courtId},
-      ),
+      onTap: () => _navigateToBooking(courtId),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -375,14 +394,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const TextSpan(
-                              text: '/giờ',
-                              style: TextStyle(
-                                color: Color(0xFF6D6E6D),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -420,11 +431,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   const SizedBox(height: 16),
                   // Book button
                   GestureDetector(
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      '/field-detail',
-                      arguments: {'court': venue..['id'] = courtId},
-                    ),
+                    onTap: () => _navigateToBooking(courtId),
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 
@@ -235,36 +236,40 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.95),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
+      bottomNavigationBar: Material(
+        color: Colors.white,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
             ),
-          ],
-          border: Border(
-            top: BorderSide(color: Colors.grey.shade100),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, -4),
+              ),
+            ],
+            border: Border(
+              top: BorderSide(color: Colors.grey.shade100),
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.home, 'Trang chủ', 0),
-                _buildNavItem(Icons.explore, 'Khám phá', 1),
-                _buildNavItem(Icons.favorite, 'Yêu thích', 2),
-                _buildNavItem(Icons.calendar_today, 'Lịch đặt', 3),
-                _buildNavItem(Icons.person, 'Tài khoản', 4),
-              ],
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(Icons.home, 'Trang chủ', 0),
+                  _buildNavItem(Icons.explore, 'Khám phá', 1),
+                  _buildNavItem(Icons.favorite, 'Yêu thích', 2),
+                  _buildNavItem(Icons.calendar_today, 'Lịch đặt', 3),
+                  _buildNavItem(Icons.person, 'Tài khoản', 4),
+                ],
+              ),
             ),
           ),
         ),
@@ -329,12 +334,21 @@ class _SplashScreenState extends State<SplashScreen> {
     final prefs = await SharedPreferences.getInstance();
     final introCompleted = prefs.getBool('intro_completed') ?? false;
     
-    if (mounted) {
-      if (introCompleted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      } else {
-        Navigator.pushReplacementNamed(context, '/intro');
-      }
+    if (!mounted) return;
+
+    if (!introCompleted) {
+      Navigator.pushReplacementNamed(context, '/intro');
+      return;
+    }
+
+    // Chờ Firebase Auth restore session (tránh currentUser = null khi mới khởi động)
+    final user = await FirebaseAuth.instance.authStateChanges().first;
+    if (!mounted) return;
+
+    if (user != null) {
+      Navigator.pushReplacementNamed(context, '/main');
+    } else {
+      Navigator.pushReplacementNamed(context, '/login');
     }
   }
 

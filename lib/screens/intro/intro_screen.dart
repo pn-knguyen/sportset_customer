@@ -118,7 +118,7 @@ class _IntroScreenState extends State<IntroScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
                         const Text(
                           'SPORTSET',
                           style: TextStyle(
@@ -128,7 +128,7 @@ class _IntroScreenState extends State<IntroScreen> {
                             letterSpacing: 1.5,
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
                       ],
                     ),
                   ),
@@ -269,7 +269,7 @@ class _IntroScreenState extends State<IntroScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 36),
+                        const SizedBox(height: 12),
                       ],
                     ),
                   ),

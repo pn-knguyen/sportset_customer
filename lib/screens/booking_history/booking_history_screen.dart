@@ -228,6 +228,29 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
   String _normalizeStatus(String status) => status.trim().toLowerCase();
 
+  Future<void> _navigateToBooking(String courtId) async {
+    if (courtId.isEmpty) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('courts')
+          .doc(courtId)
+          .get();
+      if (!mounted) return;
+      final Map<String, dynamic> courtData = doc.exists && doc.data() != null
+          ? Map<String, dynamic>.from(doc.data()!)
+          : {};
+      courtData['id'] = courtId;
+      Navigator.pushNamed(context, '/booking', arguments: {'court': courtData});
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.pushNamed(
+        context,
+        '/booking',
+        arguments: {'court': <String, dynamic>{'id': courtId}},
+      );
+    }
+  }
+
   bool _isUpcomingBooking(Map<String, dynamic> booking) {
     final status = (booking['statusRaw'] ?? '').toString();
     if (status == 'cancelled' || status == 'completed') {
@@ -585,34 +608,58 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     ),
                   ],
                 ),
-                GestureDetector(
-                  onTap: () => _showQRBottomSheet(context, booking),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _navigateToBooking((booking['courtId'] ?? '').toString()),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFF4CAF50)),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
-                    ),
-                    child: const Text(
-                      'Xem mã QR',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        child: const Text(
+                          'Đặt lại',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4CAF50),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () => _showQRBottomSheet(context, booking),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          'Xem mã QR',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -903,18 +950,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                         },
                       );
                     } else {
-                      final courtId = (booking['courtId'] ?? '').toString();
-                      if (courtId.isEmpty) return;
-                      final nav = Navigator.of(context);
-                      FirebaseFirestore.instance
-                          .collection('fields')
-                          .doc(courtId)
-                          .get()
-                          .then((doc) {
-                        if (!doc.exists) return;
-                        final court = {'id': doc.id, ...doc.data()!};
-                        nav.pushNamed('/booking', arguments: {'court': court});
-                      });
+                      _navigateToBooking((booking['courtId'] ?? '').toString());
                     }
                   },
                   child: Container(

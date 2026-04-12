@@ -395,15 +395,52 @@ class _BookingScreenState extends State<BookingScreen> {
     return 'Vui lòng kiểm tra lại thông tin đặt sân.';
   }
 
+  String _normalizeAmenityText(String input) {
+    const map = {
+      'à': 'a', 'á': 'a', 'ạ': 'a', 'ả': 'a', 'ã': 'a',
+      'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ậ': 'a', 'ẩ': 'a', 'ẫ': 'a',
+      'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ặ': 'a', 'ẳ': 'a', 'ẵ': 'a',
+      'è': 'e', 'é': 'e', 'ẹ': 'e', 'ẻ': 'e', 'ẽ': 'e',
+      'ê': 'e', 'ề': 'e', 'ế': 'e', 'ệ': 'e', 'ể': 'e', 'ễ': 'e',
+      'ì': 'i', 'í': 'i', 'ị': 'i', 'ỉ': 'i', 'ĩ': 'i',
+      'ò': 'o', 'ó': 'o', 'ọ': 'o', 'ỏ': 'o', 'õ': 'o',
+      'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ộ': 'o', 'ổ': 'o', 'ỗ': 'o',
+      'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ợ': 'o', 'ở': 'o', 'ỡ': 'o',
+      'ù': 'u', 'ú': 'u', 'ụ': 'u', 'ủ': 'u', 'ũ': 'u',
+      'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ự': 'u', 'ử': 'u', 'ữ': 'u',
+      'ỳ': 'y', 'ý': 'y', 'ỵ': 'y', 'ỷ': 'y', 'ỹ': 'y',
+      'đ': 'd',
+    };
+    final buffer = StringBuffer();
+    for (final char in input.toLowerCase().split('')) {
+      buffer.write(map[char] ?? char);
+    }
+    return buffer.toString();
+  }
+
   IconData _amenityIcon(String label) {
-    final value = label.toLowerCase();
-    if (value.contains('wifi')) return Icons.wifi;
-    if (value.contains('xe') || value.contains('parking')) return Icons.local_parking;
-    if (value.contains('nước') || value.contains('drink')) return Icons.local_drink;
-    if (value.contains('wc') || value.contains('toilet') || value.contains('vệ sinh')) {
+    final v = _normalizeAmenityText(label);
+    if (v.contains('wifi') || v.contains('wi-fi')) return Icons.wifi;
+    if (v.contains('gui xe') || v.contains('bai xe') || v.contains('do xe') || v.contains('parking')) {
+      return Icons.local_parking;
+    }
+    if (v.contains('nuoc uong') || v.contains('giai khat') || v.contains('drink') || v.contains('nuoc')) {
+      return Icons.local_drink;
+    }
+    if (v.contains('tam') || v.contains('shower')) return Icons.shower;
+    if (v.contains('thay do') || v.contains('phong thay') || v.contains('locker')) return Icons.checkroom;
+    if (v.contains('wc') || v.contains('ve sinh') || v.contains('toilet') || v.contains('nha ve sinh')) {
       return Icons.wc;
     }
-    if (value.contains('ăn') || value.contains('tin')) return Icons.restaurant;
+    if (v.contains('den') || v.contains('chieu sang') || v.contains('lighting')) return Icons.lightbulb;
+    if (v.contains('huan luyen') || v.contains('coach') || v.contains('trong tai')) return Icons.groups;
+    if (v.contains('dung cu') || v.contains('vot') || v.contains('thue') || v.contains('bong')) {
+      return Icons.sports;
+    }
+    if (v.contains('bao ho') || v.contains('y te') || v.contains('first aid')) return Icons.health_and_safety;
+    if (v.contains('khan dai') || v.contains('tribune') || v.contains('grandstand')) return Icons.stadium;
+    if (v.contains('an') || v.contains('can tin') || v.contains('restaurant')) return Icons.restaurant;
+    if (v.contains('xe') || v.contains('parking')) return Icons.local_parking;
     return Icons.check_circle_outline;
   }
 
@@ -757,43 +794,44 @@ class _BookingScreenState extends State<BookingScreen> {
             color: Color(0xFF1A1C1C),
           ),
         ),
-        const SizedBox(height: 2),
-        GridView.count(
-          crossAxisCount: 4,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 4,
-          childAspectRatio: 0.9,
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 12,
           children: amenities.map((amenity) {
-            return Column(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF18A5A7).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+            final itemWidth = (MediaQuery.of(context).size.width - 32 - 24) / 4;
+            return SizedBox(
+              width: itemWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF18A5A7).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _amenityIcon(amenity),
+                      color: const Color(0xFF18A5A7),
+                      size: 20,
+                    ),
                   ),
-                  child: Icon(
-                    _amenityIcon(amenity),
-                    color: const Color(0xFF18A5A7),
-                    size: 20,
+                  const SizedBox(height: 4),
+                  Text(
+                    amenity,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1C1C),
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  amenity,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1C1C),
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                ],
+              ),
             );
           }).toList(),
         ),
