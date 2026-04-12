@@ -27,8 +27,16 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: Column(
+      backgroundColor: const Color(0xFFE8F5E9),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFE8F5E9), Color(0xFFFFFFFF)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Column(
         children: [
           _buildHeader(),
           Expanded(
@@ -38,7 +46,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(
-                      color: Color(0xFFFF9800),
+                      color: Color(0xFF4CAF50),
                     ),
                   );
                 }
@@ -109,6 +117,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -126,9 +135,12 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
     final dateTime = _extractDateTime(selectedDate['dateTime']);
     final statusRaw = _normalizeStatus((data['status'] ?? '').toString());
+    final startTimeStr = (selectedSlot['startTime'] ?? '').toString();
+    final startDateTime = _combineDateTime(dateTime, startTimeStr);
 
     return {
       'id': doc.id,
+      'courtId': (data['courtId'] ?? '').toString(),
       'name': (data['courtName'] ?? 'Sân thể thao').toString(),
       'image': (data['courtImageUrl'] ?? '').toString(),
       'sportType': (data['sportType'] ?? '').toString(),
@@ -140,12 +152,22 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       'time': _buildTimeText(selectedSlot),
       'date': _buildDateText(selectedDate, dateTime),
       'dateTime': dateTime,
+      'startDateTime': startDateTime,
       'statusRaw': statusRaw,
       'status': _statusLabel(statusRaw),
       'paymentStatus': (data['paymentStatus'] ?? 'pending').toString(),
       'totalPrice': _toInt(data['totalPrice']),
       'hasReview': data['hasReview'] == true,
     };
+  }
+
+  DateTime? _combineDateTime(DateTime? date, String startTime) {
+    if (date == null) return null;
+    final parts = startTime.split(':');
+    if (parts.length < 2) return date;
+    final hour = int.tryParse(parts[0].trim()) ?? 0;
+    final minute = int.tryParse(parts[1].trim()) ?? 0;
+    return DateTime(date.year, date.month, date.day, hour, minute);
   }
 
   DateTime? _extractDateTime(dynamic value) {
@@ -212,12 +234,12 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       return false;
     }
 
-    final playDateTime = booking['dateTime'] as DateTime?;
-    if (playDateTime == null) {
+    final startDateTime = booking['startDateTime'] as DateTime?;
+    if (startDateTime == null) {
       return false;
     }
 
-    return playDateTime.isAfter(DateTime.now());
+    return startDateTime.isAfter(DateTime.now());
   }
 
   String _statusLabel(String status) {
@@ -259,18 +281,26 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.event_busy_rounded,
-              size: 52,
-              color: Colors.grey.shade400,
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.event_busy_rounded,
+                size: 36,
+                color: Color(0xFF4CAF50),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
+              style: const TextStyle(
+                fontSize: 15,
+                color: Color(0xFF6F7A6B),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -283,103 +313,120 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   Widget _buildHeader() {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFFFFF8F6),
+        gradient: LinearGradient(
+          colors: [Color(0xFFE8F5E9), Color(0xFFE8F5E9)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
         border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFFF9800),
-            width: 0.5,
-          ),
+          bottom: BorderSide(color: Color(0xFFBECAB9), width: 0.5),
         ),
       ),
       child: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Text(
-                'LỊCH ĐẶT CỦA TÔI',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A237E),
-                  letterSpacing: 1.5,
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Row(
+                children: [
+                  const SizedBox(width: 40),
+                  const Expanded(
+                    child: Text(
+                      'Lịch đặt của tôi',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 40),
+                ],
               ),
             ),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedTab = 0;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: _selectedTab == 0
-                                ? const Color(0xFFFF9800)
-                                : Colors.transparent,
-                            width: 2,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F3F3).withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedTab = 0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _selectedTab == 0 ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(9),
+                            boxShadow: _selectedTab == 0
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.06),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Text(
+                            'Sắp tới',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.w600,
+                              color: _selectedTab == 0
+                                  ? const Color(0xFF2E7D32)
+                                  : const Color(0xFF6F7A6B),
+                            ),
                           ),
                         ),
                       ),
-                      child: Text(
-                        'Sắp tới',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTab == 0
-                              ? FontWeight.bold
-                              : FontWeight.w500,
-                          color: _selectedTab == 0
-                              ? const Color(0xFFFF9800)
-                              : Colors.grey,
-                        ),
-                      ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedTab = 1;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: _selectedTab == 1
-                                ? const Color(0xFFFF9800)
-                                : Colors.transparent,
-                            width: 2,
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedTab = 1),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _selectedTab == 1 ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(9),
+                            boxShadow: _selectedTab == 1
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.06),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Text(
+                            'Lịch sử',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.w600,
+                              color: _selectedTab == 1
+                                  ? const Color(0xFF2E7D32)
+                                  : const Color(0xFF6F7A6B),
+                            ),
                           ),
                         ),
                       ),
-                      child: Text(
-                        'Lịch sử',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTab == 1
-                              ? FontWeight.bold
-                              : FontWeight.w500,
-                          color: _selectedTab == 1
-                              ? const Color(0xFFFF9800)
-                              : Colors.grey,
-                        ),
-                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ],
         ),
@@ -392,166 +439,177 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     final isPending = statusRaw == 'pending';
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white, width: 1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8F5E9), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              booking['image'] ?? '',
-              width: 96,
-              height: 96,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                width: 96,
-                height: 96,
-                color: Colors.grey.shade200,
-                alignment: Alignment.center,
-                child: const Icon(Icons.image_not_supported_rounded, color: Colors.grey),
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        (booking['name'] ?? '').toString(),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1A237E),
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isPending
-                            ? const Color(0xFFFF9800).withValues(alpha: 0.12)
-                            : const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isPending
-                              ? const Color(0xFFFF9800).withValues(alpha: 0.2)
-                              : const Color(0xFF4CAF50).withValues(alpha: 0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        (booking['status'] ?? 'Đã xác nhận').toString(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: isPending ? const Color(0xFFFF9800) : const Color(0xFF4CAF50),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.schedule, size: 14, color: Colors.grey),
-                    const SizedBox(width: 6),
-                    Text(
-                      (booking['time'] ?? '').toString(),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_month, size: 14, color: Colors.grey),
-                    const SizedBox(width: 6),
-                    Text(
-                      (booking['date'] ?? '').toString(),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${_formatMoney(_toInt(booking['totalPrice']))} • ${(booking['paymentStatus'] ?? 'pending').toString().toUpperCase()}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A237E),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // circular image
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+                    width: 2,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: () {
-                      final selectedDate =
-                          (booking['selectedDate'] is Map)
-                              ? Map<String, dynamic>.from(
-                                  booking['selectedDate'] as Map,
-                                )
-                              : <String, dynamic>{};
-
-                      final selectedSlot =
-                          (booking['selectedSlot'] is Map)
-                              ? Map<String, dynamic>.from(
-                                  booking['selectedSlot'] as Map,
-                                )
-                              : <String, dynamic>{};
-
-                      _showQRBottomSheet(context, booking);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                child: ClipOval(
+                  child: Image.network(
+                    booking['image'] ?? '',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: const Color(0xFFC8E6C9),
+                      child: const Icon(Icons.sports_soccer, color: Color(0xFF4CAF50), size: 28),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            (booking['name'] ?? '').toString(),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A1C1C),
+                              height: 1.2,
+                            ),
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF9800).withValues(alpha: 0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isPending
+                                ? const Color(0xFFFFF9C4)
+                                : const Color(0xFF94F990).withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            (booking['status'] ?? 'Đã xác nhận').toString().toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.4,
+                              color: isPending ? const Color(0xFF994700) : const Color(0xFF005313),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if ((booking['sportType'] ?? '').toString().isNotEmpty)
+                      Row(
+                        children: [
+                          const Icon(Icons.sports, size: 14, color: Color(0xFF6F7A6B)),
+                          const SizedBox(width: 5),
+                          Text(
+                            (booking['sportType'] ?? '').toString(),
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
                           ),
                         ],
                       ),
-                      child: const Text(
-                        'Xem mã QR',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 14, color: Color(0xFF00696B)),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${(booking['time'] ?? '')} | ${(booking['date'] ?? '')}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF00696B),
+                          ),
                         ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.only(top: 12),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFE8F5E9), width: 1)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TỔNG THANH TOÁN',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF6F7A6B),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatMoney(_toInt(booking['totalPrice'])),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2E7D32),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: () => _showQRBottomSheet(context, booking),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'Xem mã QR',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -563,7 +621,6 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       ),
     );
   }
-
   void _showQRBottomSheet(BuildContext context, Map<String, dynamic> booking) {
     final bookingId = (booking['id'] ?? '').toString();
     final name = (booking['name'] ?? 'Sân thể thao').toString();
@@ -583,7 +640,6 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // drag handle
             Container(
               width: 40,
               height: 4,
@@ -601,7 +657,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A237E),
+                    color: Color(0xFF2E7D32),
                   ),
                 ),
                 GestureDetector(
@@ -609,10 +665,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: const Color(0xFFE8F5E9),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 20, color: Colors.grey),
+                    child: const Icon(Icons.close, size: 20, color: Color(0xFF2E7D32)),
                   ),
                 ),
               ],
@@ -623,10 +679,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.3)),
+                border: Border.all(color: const Color(0xFFBECAB9)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -638,11 +694,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 size: 200,
                 eyeStyle: const QrEyeStyle(
                   eyeShape: QrEyeShape.square,
-                  color: Color(0xFF1A237E),
+                  color: Color(0xFF2E7D32),
                 ),
                 dataModuleStyle: const QrDataModuleStyle(
                   dataModuleShape: QrDataModuleShape.square,
-                  color: Color(0xFF1A237E),
+                  color: Color(0xFF2E7D32),
                 ),
               ),
             ),
@@ -652,7 +708,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A237E),
+                color: Color(0xFF1A1C1C),
               ),
               textAlign: TextAlign.center,
             ),
@@ -660,7 +716,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               const SizedBox(height: 4),
               Text(
                 date,
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF6F7A6B)),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -668,7 +724,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               const SizedBox(height: 2),
               Text(
                 time,
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF6F7A6B)),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -676,7 +732,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               const SizedBox(height: 8),
               Text(
                 'Mã đặt: $bookingId',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                style: const TextStyle(fontSize: 11, color: Color(0xFFBECAB9)),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -692,193 +748,212 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     final hasReview = booking['hasReview'] == true;
 
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white, width: 1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8F5E9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 15,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Opacity(
-        opacity: isCancelled ? 0.9 : 1.0,
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: ColorFiltered(
-                colorFilter: isCancelled
-                    ? ColorFilter.mode(
-                        Colors.grey.withValues(alpha: 0.3),
-                        BlendMode.saturation,
-                      )
-                    : const ColorFilter.mode(
-                        Colors.transparent,
-                        BlendMode.multiply,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Circular image
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+                      width: 2,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: ColorFiltered(
+                      colorFilter: isCancelled
+                          ? const ColorFilter.matrix(<double>[
+                              0.2126, 0.7152, 0.0722, 0, 0,
+                              0.2126, 0.7152, 0.0722, 0, 0,
+                              0.2126, 0.7152, 0.0722, 0, 0,
+                              0, 0, 0, 1, 0,
+                            ])
+                          : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
+                      child: Image.network(
+                        booking['image'] ?? '',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: const Color(0xFFE8F5E9),
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.sports_tennis, color: Color(0xFF4CAF50), size: 28),
+                        ),
                       ),
-                child: Image.network(
-                  booking['image'] ?? '',
-                  width: 96,
-                  height: 96,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: 96,
-                    height: 96,
-                    color: Colors.grey.shade200,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.image_not_supported_rounded, color: Colors.grey),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                const SizedBox(width: 12),
+                // Info
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          (booking['name'] ?? '').toString(),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A237E),
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isCancelled
-                              ? const Color(0xFFF44336).withValues(alpha: 0.1)
-                              : const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isCancelled
-                                ? const Color(0xFFF44336).withValues(alpha: 0.2)
-                                : const Color(0xFF4CAF50).withValues(alpha: 0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          (booking['status'] ?? '').toString(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isCancelled ? const Color(0xFFF44336) : const Color(0xFF4CAF50),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.schedule,
-                        size: 14,
-                        color: isCancelled ? Colors.grey[400] : Colors.grey,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        (booking['time'] ?? '').toString(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: isCancelled ? Colors.grey[400] : Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_month,
-                        size: 14,
-                        color: isCancelled ? Colors.grey[400] : Colors.grey,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        (booking['date'] ?? '').toString(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: isCancelled ? Colors.grey[400] : Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${_formatMoney(_toInt(booking['totalPrice']))} • ${(booking['paymentStatus'] ?? 'pending').toString().toUpperCase()}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isCancelled ? Colors.grey[400] : const Color(0xFF1A237E),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () {
-                        if (!hasReview && !isCancelled) {
-                          Navigator.pushNamed(
-                            context,
-                            '/rating',
-                            arguments: {
-                              'fieldId': booking['id'],
-                              'fieldName': booking['name'],
-                              'fieldImage': booking['image'],
-                              'playDate': booking['date'],
-                            },
-                          );
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFFF9800).withValues(alpha: 0.2),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              (booking['name'] ?? '').toString(),
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1C1C),
+                                height: 1.3,
+                              ),
                             ),
-                          ],
-                        ),
-                        child: Text(
-                          (!hasReview && !isCancelled) ? 'Đánh giá' : 'Đặt lại',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
                           ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isCancelled
+                                  ? const Color(0xFFBA1A1A).withValues(alpha: 0.1)
+                                  : const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              (booking['status'] ?? '').toString(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: isCancelled
+                                    ? const Color(0xFFBA1A1A)
+                                    : const Color(0xFF4CAF50),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.schedule_outlined, size: 13, color: Color(0xFF6F7A6B)),
+                          const SizedBox(width: 4),
+                          Text(
+                            (booking['time'] ?? '').toString(),
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.calendar_today_outlined, size: 13, color: Color(0xFF6F7A6B)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              (booking['date'] ?? '').toString(),
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Divider + price + action
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFE8F5E9))),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _formatMoney(_toInt(booking['totalPrice'])),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2E7D32),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    if (!hasReview && !isCancelled) {
+                      Navigator.pushNamed(
+                        context,
+                        '/rating',
+                        arguments: {
+                          'bookingId': booking['id'],
+                          'fieldId': booking['courtId'],
+                          'fieldName': booking['name'],
+                          'fieldImage': booking['image'],
+                          'playDate': booking['date'],
+                        },
+                      );
+                    } else {
+                      final courtId = (booking['courtId'] ?? '').toString();
+                      if (courtId.isEmpty) return;
+                      final nav = Navigator.of(context);
+                      FirebaseFirestore.instance
+                          .collection('fields')
+                          .doc(courtId)
+                          .get()
+                          .then((doc) {
+                        if (!doc.exists) return;
+                        final court = {'id': doc.id, ...doc.data()!};
+                        nav.pushNamed('/booking', arguments: {'court': court});
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: (!hasReview && !isCancelled)
+                          ? const LinearGradient(
+                              colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : const LinearGradient(
+                              colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    child: Text(
+                      (!hasReview && !isCancelled) ? 'Đánh giá' : 'Đặt lại',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

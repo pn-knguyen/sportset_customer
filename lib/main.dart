@@ -42,6 +42,14 @@ import 'screens/profile/terms_screen.dart';
 import 'screens/profile/privacy_policy_screen.dart';
 import 'screens/profile/vouchers_screen.dart';
 
+// Payment
+import 'screens/payment_screen.dart';
+import 'screens/payment_result_screen.dart';
+
+// Deep link
+import 'dart:async';
+import 'package:app_links/app_links.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -50,22 +58,73 @@ Future<void> main() async {
   runApp(const SportsetApp());
 }
 
-class SportsetApp extends StatelessWidget {
+class SportsetApp extends StatefulWidget {
   const SportsetApp({super.key});
+
+  @override
+  State<SportsetApp> createState() => _SportsetAppState();
+}
+
+class _SportsetAppState extends State<SportsetApp> {
+  final GlobalKey<NavigatorState> _navigatorKey =
+      GlobalKey<NavigatorState>();
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _appLinks = AppLinks();
+    _linkSub = _appLinks.uriLinkStream.listen(_handleDeepLink);
+  }
+
+  void _handleDeepLink(Uri uri) {
+    // MoMo payment result
+    if (uri.scheme == 'yourapp' && uri.host == 'payment-result') {
+      _navigatorKey.currentState?.pushNamed(
+        '/payment-result',
+        arguments: {
+          'resultCode': uri.queryParameters['resultCode'] ?? '',
+          'orderId': uri.queryParameters['orderId'] ?? '',
+          'message': uri.queryParameters['message'] ?? '',
+        },
+      );
+      return;
+    }
+    // Firebase password reset App Link
+    if (uri.scheme == 'https' &&
+        uri.host == 'sportset-d345c.firebaseapp.com') {
+      final mode = uri.queryParameters['mode'];
+      final oobCode = uri.queryParameters['oobCode'];
+      if (mode == 'resetPassword' && oobCode != null) {
+        _navigatorKey.currentState?.pushNamed(
+          '/reset-password',
+          arguments: {'oobCode': oobCode},
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Sportset Customer',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFFFF9800),
+        primaryColor: const Color(0xFF4CAF50),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF9800),
-          primary: const Color(0xFFFF9800),
-          secondary: const Color(0xFFF44336),
+          seedColor: const Color(0xFF4CAF50),
+          primary: const Color(0xFF4CAF50),
+          secondary: const Color(0xFF2E7D32),
         ),
-        scaffoldBackgroundColor: const Color(0xFFFFF8F6),
+        scaffoldBackgroundColor: const Color(0xFFE8F5E9),
         useMaterial3: true,
         fontFamily: 'Lexend',
       ),
@@ -109,6 +168,7 @@ class SportsetApp extends StatelessWidget {
         '/rating': (context) {
           final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
           return RatingScreen(
+            bookingId: args?['bookingId'] ?? '',
             fieldId: args?['fieldId'] ?? '',
             fieldName: args?['fieldName'] ?? '',
             fieldImage: args?['fieldImage'] ?? '',
@@ -123,6 +183,18 @@ class SportsetApp extends StatelessWidget {
         '/terms': (context) => const TermsScreen(),
         '/privacy-policy': (context) => const PrivacyPolicyScreen(),
         '/vouchers': (context) => const VouchersScreen(),
+
+        // Payment
+        '/payment': (context) => const PaymentScreen(),
+        '/payment-result': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments
+              as Map<String, dynamic>?;
+          return PaymentResultScreen(
+            resultCode: args?['resultCode'] ?? '',
+            orderId: args?['orderId'] ?? '',
+            message: args?['message'] ?? '',
+          );
+        },
       },
     );
   }
@@ -138,6 +210,18 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  bool _didInitIndex = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitIndex) return;
+    _didInitIndex = true;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['initialIndex'] is int) {
+      _currentIndex = args['initialIndex'] as int;
+    }
+  }
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -154,6 +238,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.95),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
           border: Border(
             top: BorderSide(color: Colors.grey.shade100),
           ),
@@ -191,8 +286,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           Icon(
             icon,
             color: isActive
-                ? const Color(0xFFFF9800)
-                : const Color(0xFF1A237E).withValues(alpha: 0.6),
+                ? const Color(0xFF4CAF50)
+                : const Color(0xFF9E9E9E),
             size: 24,
           ),
           const SizedBox(height: 4),
@@ -200,8 +295,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label,
             style: TextStyle(
               color: isActive
-                  ? const Color(0xFFFF9800)
-                  : const Color(0xFF1A237E).withValues(alpha: 0.6),
+                  ? const Color(0xFF4CAF50)
+                  : const Color(0xFF9E9E9E),
               fontSize: 10,
               fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
             ),
@@ -246,7 +341,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFF9800),
+      backgroundColor: const Color(0xFF4CAF50),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -258,15 +353,15 @@ class _SplashScreenState extends State<SplashScreen> {
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
                   colors: [
-                    Color(0xFFFF9800),
-                    Color(0xFFF44336),
+                    Color(0xFF4CAF50),
+                    Color(0xFF2E7D32),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.white.withOpacity(0.3),
+                    color: Colors.white.withValues(alpha: 0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),

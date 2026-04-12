@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,303 +15,195 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 128),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildNotificationsSection(),
-                  const SizedBox(height: 32),
-                  _buildSecuritySection(),
-                  const SizedBox(height: 32),
-                  _buildDisplaySection(),
-                  const SizedBox(height: 32),
-                  _buildInfoSection(),
-                ],
-              ),
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFE8F5E9), Colors.white],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF8F6),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        ),
+        child: SafeArea(
+          child: Column(
             children: [
+              // AppBar
               SizedBox(
-                width: 36,
-                height: 36,
-                child: IconButton(
-                  icon: const Icon(Icons.chevron_left, size: 24, color: Color(0xFF1A237E)),
-                  onPressed: () => Navigator.pop(context),
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-              const Text(
-                'Cài đặt ứng dụng',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A237E),
-                ),
-              ),
-              const SizedBox(width: 36),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('THÔNG BÁO'),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                offset: const Offset(0, 2),
-                blurRadius: 8,
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              _buildToggleItem(
-                icon: Icons.notifications,
-                title: 'Thông báo đẩy',
-                value: _pushNotifications,
-                onChanged: (value) {
-                  setState(() {
-                    _pushNotifications = value;
-                  });
-                },
-                showDivider: true,
-              ),
-              _buildToggleItem(
-                icon: Icons.mail,
-                title: 'Thông báo qua Email',
-                value: _emailNotifications,
-                onChanged: (value) {
-                  setState(() {
-                    _emailNotifications = value;
-                  });
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSecuritySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('BẢO MẬT'),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                offset: const Offset(0, 2),
-                blurRadius: 8,
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              _buildMenuItem(
-                icon: Icons.lock_reset,
-                title: 'Đổi mật khẩu',
-                onTap: () {
-                  // Navigate to change password screen
-                },
-                showDivider: true,
-              ),
-              _buildMenuItem(
-                icon: Icons.fingerprint,
-                title: 'Cài đặt Face ID/Vân tay',
-                onTap: () {
-                  // Navigate to biometric settings
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDisplaySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('HIỂN THỊ'),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                offset: const Offset(0, 2),
-                blurRadius: 8,
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              _buildToggleItem(
-                icon: Icons.dark_mode,
-                title: 'Chế độ tối (Dark Mode)',
-                value: _darkMode,
-                onChanged: (value) {
-                  setState(() {
-                    _darkMode = value;
-                  });
-                },
-                showDivider: true,
-              ),
-              _buildMenuItem(
-                icon: Icons.translate,
-                title: 'Ngôn ngữ',
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+                height: 56,
+                child: Row(
                   children: [
-                    Text(
-                      'Tiếng Việt',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[400],
-                        fontWeight: FontWeight.w500,
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Color(0xFF4CAF50)),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Expanded(
+                      child: Text(
+                        'Cài đặt ứng dụng',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF4CAF50),
+                          letterSpacing: -0.3,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.chevron_right,
-                      color: Colors.grey[300],
-                      size: 18,
-                    ),
+                    const SizedBox(width: 48),
                   ],
                 ),
-                onTap: () {
-                  // Navigate to language selection
-                },
               ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('THÔNG TIN'),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                offset: const Offset(0, 2),
-                blurRadius: 8,
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              _buildMenuItem(
-                icon: Icons.description,
-                title: 'Điều khoản sử dụng',
-                onTap: () {
-                  Navigator.pushNamed(context, '/terms');
-                },
-                showDivider: true,
-              ),
-              _buildMenuItem(
-                icon: Icons.verified_user,
-                title: 'Chính sách bảo mật',
-                onTap: () {
-                  Navigator.pushNamed(context, '/privacy-policy');
-                },
-                showDivider: true,
-              ),
-              _buildMenuItem(
-                icon: Icons.info,
-                title: 'Phiên bản',
-                trailing: Text(
-                  '2.4.0',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[400],
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionHeader('THÔNG BÁO'),
+                      _buildCard([
+                        _buildToggleRow(
+                          icon: Icons.notifications_outlined,
+                          title: 'Thông báo đẩy',
+                          value: _pushNotifications,
+                          onChanged: (v) =>
+                              setState(() => _pushNotifications = v),
+                          showDivider: true,
+                        ),
+                        _buildToggleRow(
+                          icon: Icons.mail_outline_rounded,
+                          title: 'Thông báo qua Email',
+                          value: _emailNotifications,
+                          onChanged: (v) =>
+                              setState(() => _emailNotifications = v),
+                        ),
+                      ]),
+                      const SizedBox(height: 32),
+                      _buildSectionHeader('BẢO MẬT'),
+                      _buildCard([
+                        _buildNavRow(
+                          icon: Icons.lock_outline_rounded,
+                          title: 'Đổi mật khẩu',
+                          onTap: () {},
+                          showDivider: true,
+                        ),
+                        _buildNavRow(
+                          icon: Icons.fingerprint_rounded,
+                          title: 'Cài đặt Face ID/Vân tay',
+                          onTap: () {},
+                        ),
+                      ]),
+                      const SizedBox(height: 32),
+                      _buildSectionHeader('HIỂN THỊ'),
+                      _buildCard([
+                        _buildToggleRow(
+                          icon: Icons.dark_mode_outlined,
+                          title: 'Chế độ tối (Dark Mode)',
+                          value: _darkMode,
+                          onChanged: (v) => setState(() => _darkMode = v),
+                          showDivider: true,
+                        ),
+                        _buildNavRow(
+                          icon: Icons.language_outlined,
+                          title: 'Ngôn ngữ',
+                          onTap: () {},
+                          trailing: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Tiếng Việt',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF4CAF50),
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Icon(Icons.expand_more_rounded,
+                                  size: 18, color: Color(0xFF4CAF50)),
+                            ],
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 32),
+                      _buildSectionHeader('THÔNG TIN'),
+                      _buildCard([
+                        _buildNavRow(
+                          icon: Icons.description_outlined,
+                          title: 'Điều khoản sử dụng',
+                          onTap: () =>
+                              Navigator.pushNamed(context, '/terms'),
+                          showDivider: true,
+                          trailingIcon: Icons.open_in_new_rounded,
+                        ),
+                        _buildNavRow(
+                          icon: Icons.policy_outlined,
+                          title: 'Chính sách bảo mật',
+                          onTap: () =>
+                              Navigator.pushNamed(context, '/privacy-policy'),
+                          showDivider: true,
+                          trailingIcon: Icons.open_in_new_rounded,
+                        ),
+                        _buildNavRow(
+                          icon: Icons.info_outline_rounded,
+                          title: 'Phiên bản',
+                          onTap: null,
+                          trailing: const Text(
+                            '2.4.0',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF3F4A3C),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
       child: Text(
         title,
         style: const TextStyle(
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: FontWeight.bold,
-          color: Colors.grey,
-          letterSpacing: 2.4,
+          color: Color(0xFF3F4A3C),
+          letterSpacing: 2,
         ),
       ),
     );
   }
 
-  Widget _buildToggleItem({
+  Widget _buildCard(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF3F3F3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(children: children),
+      ),
+    );
+  }
+
+  Widget _buildToggleRow({
     required IconData icon,
     required String title,
     required bool value,
@@ -319,105 +211,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool showDivider = false,
   }) {
     return Container(
-      decoration: BoxDecoration(
-        border: showDivider
-            ? Border(
-                bottom: BorderSide(
-                  color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-                ),
-              )
-            : null,
-      ),
+      decoration: showDivider
+          ? const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFF3F3F3)),
+              ),
+            )
+          : null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE3F2FD),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: const Color(0xFF1A237E),
-                size: 22,
-              ),
-            ),
+            _buildIconBox(icon),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
                 title,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A237E),
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A1C1C),
                 ),
               ),
             ),
-            _buildToggleSwitch(value, onChanged),
+            _buildSwitch(value, onChanged),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMenuItem({
+  Widget _buildNavRow({
     required IconData icon,
     required String title,
-    Widget? trailing,
-    VoidCallback? onTap,
+    required VoidCallback? onTap,
     bool showDivider = false,
+    Widget? trailing,
+    IconData trailingIcon = Icons.chevron_right,
   }) {
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          decoration: BoxDecoration(
-            border: showDivider
-                ? Border(
-                    bottom: BorderSide(
-                      color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-                    ),
-                  )
-                : null,
-          ),
+          decoration: showDivider
+              ? const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFFF3F3F3)),
+                  ),
+                )
+              : null,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE3F2FD),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    icon,
-                    color: const Color(0xFF1A237E),
-                    size: 22,
-                  ),
-                ),
+                _buildIconBox(icon),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A237E),
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1A1C1C),
                     ),
                   ),
                 ),
                 trailing ??
-                    Icon(
-                      Icons.chevron_right,
-                      color: Colors.grey[300],
-                      size: 18,
-                    ),
+                    Icon(trailingIcon,
+                        color: const Color(0xFFBECAB9), size: 20),
               ],
             ),
           ),
@@ -426,20 +290,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildToggleSwitch(bool value, ValueChanged<bool> onChanged) {
+  Widget _buildIconBox(IconData icon) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: const Color(0xFF80F5F6).withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: const Color(0xFF18A5A7), size: 22),
+    );
+  }
+
+  Widget _buildSwitch(bool value, ValueChanged<bool> onChanged) {
     return GestureDetector(
       onTap: () => onChanged(!value),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
         width: 44,
         height: 24,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color: value ? const Color(0xFFFF9800) : Colors.grey[300],
+          color: value ? const Color(0xFF4CAF50) : const Color(0xFFE0E0E0),
         ),
         child: AnimatedAlign(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          alignment:
+              value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
             width: 16,
             height: 16,
@@ -450,8 +329,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.15),
-                  offset: const Offset(0, 1),
                   blurRadius: 2,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),

@@ -1,5 +1,8 @@
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'dart:ui';
+import 'package:geolocator/geolocator.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -9,59 +12,187 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  final List<Map<String, dynamic>> _favorites = [
-    {
-      'name': 'Sân bóng Chảo Lửa',
-      'image': 'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-      'rating': 4.8,
-      'price': '300k/h',
-      'address': '30 Phan Thúc Duyện, Tân Bình',
-      'distance': 'Cách bạn 1.2 km',
-    },
-    {
-      'name': 'Sân cầu lông Bình Thới',
-      'image':'https://688corp.com/wp-content/uploads/2023/06/san-the-thao-cau-long.webp',
-      'rating': 4.9,
-      'price': '120k/h',
-      'address': '220 Lãnh Binh Thăng, Q.11',
-      'distance': 'Cách bạn 4.5 km',
-    },
-    {
-      'name': 'Sân Tennis Lan Anh',
-      'image': 'https://img.meta.com.vn/Data/image/2021/03/15/kich-thuoc-san-tennis-7.jpg',
-      'rating': 4.8,
-      'price': '550k/h',
-      'address': '291 Cách Mạng Tháng 8, Q.10',
-      'distance': 'Cách bạn 3.1 km',
-    },
-    {
-      'name': 'Sân cỏ nhân tạo D36',
-      'image': 'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-      'rating': 4.9,
-      'price': '320k/h',
-      'address': '36 Hoàng Hoa Thám, Tân Bình',
-      'distance': 'Cách bạn 1.8 km',
-    },
-  ];
+  Position? _userPosition;
+  final Map<String, Map<String, double>> _facilityCoords = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+    _loadFacilityCoords();
+  }
+
+  Future<void> _getUserLocation() async {
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.low),
+      );
+      if (mounted) setState(() => _userPosition = pos);
+    } catch (_) {}
+  }
+
+  Future<void> _loadFacilityCoords() async {
+    try {
+      final snap =
+          await FirebaseFirestore.instance.collection('facilities').get();
+      final coords = <String, Map<String, double>>{};
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final lat = (data['latitude'] as num?)?.toDouble();
+        final lng = (data['longitude'] as num?)?.toDouble();
+        if (lat != null && lng != null) {
+          coords[doc.id] = {'lat': lat, 'lng': lng};
+        }
+      }
+      if (mounted) setState(() => _facilityCoords.addAll(coords));
+    } catch (_) {}
+  }
+
+  String _calcDistanceLabel(String? facilityId) {
+    if (_userPosition == null || facilityId == null || facilityId.isEmpty) {
+      return '';
+    }
+    final coords = _facilityCoords[facilityId];
+    if (coords == null) return '';
+    final lat2 = coords['lat']!;
+    final lng2 = coords['lng']!;
+    const r = 6371.0;
+    final dLat = (lat2 - _userPosition!.latitude) * pi / 180;
+    final dLng = (lng2 - _userPosition!.longitude) * pi / 180;
+    final sinDLat = sin(dLat / 2);
+    final sinDLng = sin(dLng / 2);
+    final c = 2 *
+        asin(sqrt(sinDLat * sinDLat +
+            cos(_userPosition!.latitude * pi / 180) *
+                cos(lat2 * pi / 180) *
+                sinDLng *
+                sinDLng));
+    final km = r * c;
+    return km < 1
+        ? '${(km * 1000).round()} m'
+        : '${km.toStringAsFixed(1)} km';
+  }
+
+  Future<void> _removeFavorite(String courtId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    await FirebaseFirestore.instance
+        .collection('favorites')
+        .doc(uid)
+        .collection('courts')
+        .doc(courtId)
+        .delete();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-              itemCount: _favorites.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _buildFavoriteCard(_favorites[index]),
-                );
-              },
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFE8F5E9), Colors.white],
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: uid == null
+                  ? const Center(child: Text('Vui lòng đăng nhập để xem yêu thích'))
+                  : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('favorites')
+                          .doc(uid)
+                          .collection('courts')
+                          .orderBy('savedAt', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting &&
+                            !snapshot.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator(
+                                  color: Color(0xFF4CAF50)));
+                        }
+                        if (snapshot.hasError) {
+                          return Center(
+                              child: Text('Lỗi: ${snapshot.error}',
+                                  style: const TextStyle(color: Colors.red)));
+                        }
+                        final docs = snapshot.data?.docs ?? [];
+                        if (docs.isEmpty) {
+                          return _buildEmptyState();
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                              child: Text(
+                                'Bạn có ${docs.length} địa điểm đã lưu',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF6D6E6D),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                                itemCount: docs.length,
+                                itemBuilder: (context, index) {
+                                  final data = docs[index].data();
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: _buildFavoriteCard(data),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.favorite_border, size: 64, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text(
+            'Chưa có sân yêu thích',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Nhấn ❤ trên trang chi tiết sân để lưu',
+            style: TextStyle(fontSize: 13, color: Colors.grey[400]),
           ),
         ],
       ),
@@ -70,24 +201,25 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   Widget _buildHeader() {
     return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8F6).withValues(alpha: 0.95),
-        border: const Border(
-          bottom: BorderSide(
-            color: Color(0xFFFFE0B2),
-            width: 1,
-          ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFE8F5E9), Color(0xF2E8F5E9)],
+        ),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFC8E6C9), width: 1),
         ),
       ),
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+        child: const SizedBox(
+          height: 56,
           child: Center(
-            child: const Text(
+            child: Text(
               'Sân Yêu Thích',
               style: TextStyle(
-                color: Color(0xFF1A237E),
+                color: Color(0xFF2E7D32),
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -99,192 +231,236 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Widget _buildFavoriteCard(Map<String, dynamic> venue) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFFFE0B2),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ],
+    final courtId = venue['courtId']?.toString() ?? '';
+    final facilityId = venue['facilityId']?.toString() ?? '';
+    final distLabel = _calcDistanceLabel(facilityId);
+
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(
+        context,
+        '/field-detail',
+        arguments: {'court': venue..['id'] = courtId},
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Image with rating and favorite button
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: Image.network(
-                  venue['image'],
-                  height: 192,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              // Rating badge
-              Positioned(
-                top: 12,
-                left: 12,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.star,
-                            color: Color(0xFFFF9800),
-                            size: 12,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            venue['rating'].toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF5F5F5), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              offset: const Offset(0, 2),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image area
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: Image.network(
+                    venue['image']?.toString() ?? '',
+                    height: 224,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stack) => Container(
+                      height: 224,
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.image,
+                          size: 48, color: Colors.grey),
                     ),
                   ),
                 ),
-              ),
-              // Favorite button
-              Positioned(
-                top: 12,
-                right: 12,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                // Rating badge
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.star,
+                            color: Color(0xFF4CAF50), size: 14),
+                        const SizedBox(width: 3),
+                        Text(
+                          ((venue['rating'] as num?)?.toStringAsFixed(1)) ??
+                              '0.0',
+                          style: const TextStyle(
+                            color: Color(0xFF1A1C1C),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Remove favorite button
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: () => _removeFavorite(courtId),
                     child: Container(
-                      width: 36,
-                      height: 36,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.9),
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
+                            color: Colors.black.withValues(alpha: 0.08),
                             offset: const Offset(0, 2),
-                            blurRadius: 8,
+                            blurRadius: 4,
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.favorite,
-                        color: Colors.red,
-                        size: 20,
-                      ),
+                      child: const Icon(Icons.favorite,
+                          color: Colors.red, size: 20),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-
-          // Venue details
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Name and price
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        venue['name'],
-                        style: const TextStyle(
-                          color: Color(0xFF1A237E),
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      venue['price'],
-                      style: const TextStyle(
-                        color: Color(0xFFFF9800),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-
-                // Address
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 14,
-                      color: Colors.grey[500],
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        venue['address'],
-                        style: TextStyle(
-                          color: Colors.grey[500],
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Distance
-                Row(
-                  children: [
-                    Icon(
-                      Icons.near_me,
-                      size: 12,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      venue['distance'],
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
-          ),
-        ],
+            // Content area
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name + price
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          venue['name']?.toString() ?? '',
+                          style: const TextStyle(
+                            color: Color(0xFF1A1C1C),
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: venue['price']?.toString() ?? '',
+                              style: const TextStyle(
+                                color: Color(0xFF4CAF50),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const TextSpan(
+                              text: '/giờ',
+                              style: TextStyle(
+                                color: Color(0xFF6D6E6D),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Location + distance
+                  Row(
+                    children: [
+                      Icon(Icons.location_on,
+                          size: 14, color: Colors.grey[500]),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          venue['address']?.toString() ?? '',
+                          style: TextStyle(
+                              color: Colors.grey[600], fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (distLabel.isNotEmpty) ...[
+                        const SizedBox(width: 12),
+                        Icon(Icons.near_me,
+                            size: 14, color: Colors.grey[500]),
+                        const SizedBox(width: 4),
+                        Text(
+                          distLabel,
+                          style: TextStyle(
+                              fontSize: 13, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Book button
+                  GestureDetector(
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      '/field-detail',
+                      arguments: {'court': venue..['id'] = courtId},
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Đặt ngay',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

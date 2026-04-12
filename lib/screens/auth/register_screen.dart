@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -232,110 +231,80 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: Stack(
-        children: [
-          // Background gradient effects
-          Positioned(
-            top: -40,
-            right: -40,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFFF9800).withOpacity(0.1),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                child: Container(),
-              ),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFE8F5E9), Colors.white],
             ),
           ),
-          Positioned(
-            bottom: MediaQuery.of(context).size.height * 0.25,
-            left: -80,
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFF44336).withOpacity(0.05),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
-                child: Container(),
-              ),
-            ),
-          ),
-          // Main content
-          SafeArea(
+          child: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
                       minHeight: constraints.maxHeight,
                     ),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 12),
-                            _buildLogo(),
-                            const SizedBox(height: 8),
-                            _buildTitle(),
-                            const SizedBox(height: 12),
-                            _buildForm(),
-                            const SizedBox(height: 12),
-                            _buildDivider(),
-                            const SizedBox(height: 12),
-                            _buildSocialButtons(),
-                            const Spacer(),
-                            _buildLoginLink(),
-                            const SizedBox(height: 16),
-                          ],
-                        ),
-                      ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 4),
+                        _buildLogo(),
+                        const SizedBox(height: 12),
+                        _buildTitle(),
+                        const SizedBox(height: 12),
+                        _buildForm(),
+                        const SizedBox(height: 12),
+                        _buildDivider(),
+                        const SizedBox(height: 12),
+                        _buildSocialButtons(),
+                        const SizedBox(height: 12),
+                        _buildLoginLink(),
+                        const SizedBox(height: 16),
+                      ],
                     ),
                   ),
                 );
               },
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildLogo() {
-    return Column(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          width: 56,
-          height: 56,
-          alignment: Alignment.center,
-          child: ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(
-              colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-            ).createShader(bounds),
-            child: const Icon(
-              Icons.sports_soccer,
-              size: 48,
-              color: Colors.white,
-            ),
+        ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+          ).createShader(bounds),
+          child: const Icon(
+            Icons.sports_soccer,
+            size: 36,
+            color: Colors.white,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(width: 10),
         const Text(
           'SPORTSET',
           style: TextStyle(
             color: Color(0xFF0F172A),
-            fontSize: 16,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
-            letterSpacing: 1.6,
+            letterSpacing: 2.2,
           ),
         ),
       ],
@@ -355,13 +324,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             height: 1.2,
           ),
         ),
-        SizedBox(height: 6),
+        SizedBox(height: 4),
         Text(
           'Tham gia cộng đồng thể thao SPORTSET',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Color(0xFF64748B),
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.normal,
           ),
         ),
@@ -380,7 +349,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           controller: _fullNameController,
           errorText: _fullNameError,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         // Phone input
         _buildInputField(
           label: 'Số điện thoại',
@@ -389,7 +358,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           keyboardType: TextInputType.phone,
           errorText: _phoneError,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         // Email input
         _buildInputField(
           label: 'Email',
@@ -398,7 +367,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           keyboardType: TextInputType.emailAddress,
           errorText: _emailError,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         // Password input
         _buildPasswordField(
           label: 'Mật khẩu',
@@ -412,7 +381,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             });
           },
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         // Confirm password input
         _buildPasswordField(
           label: 'Nhập lại mật khẩu',
@@ -426,31 +395,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
             });
           },
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         // Register button
         Container(
           width: double.infinity,
-          height: 48,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-              ),
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFF44336).withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+          height: 50,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
             ),
-            child: ElevatedButton(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ElevatedButton(
               onPressed: _isLoading ? null : _register,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(28),
                 ),
               ),
               child: _isLoading
@@ -487,12 +456,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 6),
+          padding: const EdgeInsets.only(left: 16, bottom: 4),
           child: Text(
             label,
             style: const TextStyle(
               color: Color(0xFF0F172A),
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -509,7 +478,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -520,11 +489,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             keyboardType: keyboardType,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFFA0A0A0)),
+              hintStyle: const TextStyle(color: Color(0xFFA0AEC0), fontSize: 14),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
+                horizontal: 20,
+                vertical: 13,
               ),
             ),
             style: const TextStyle(
@@ -535,12 +504,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         if (errorText != null)
           Padding(
-            padding: const EdgeInsets.only(left: 16, top: 4),
+            padding: const EdgeInsets.only(left: 16, top: 2),
             child: Text(
               errorText,
               style: const TextStyle(
                 color: Color(0xFFF44336),
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
           ),
@@ -560,12 +529,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 6),
+          padding: const EdgeInsets.only(left: 16, bottom: 4),
           child: Text(
             label,
             style: const TextStyle(
               color: Color(0xFF0F172A),
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -582,7 +551,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -593,16 +562,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             obscureText: !isVisible,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFFA0A0A0)),
+              hintStyle: const TextStyle(color: Color(0xFFA0AEC0), fontSize: 14),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
+                horizontal: 20,
+                vertical: 13,
               ),
               suffixIcon: IconButton(
                 icon: Icon(
                   isVisible ? Icons.visibility : Icons.visibility_off,
                   color: const Color(0xFF64748B),
+                  size: 20,
                 ),
                 onPressed: onToggle,
               ),
@@ -615,12 +585,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         if (errorText != null)
           Padding(
-            padding: const EdgeInsets.only(left: 16, top: 4),
+            padding: const EdgeInsets.only(left: 16, top: 2),
             child: Text(
               errorText,
               style: const TextStyle(
                 color: Color(0xFFF44336),
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
           ),
@@ -663,51 +633,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // Google button
         Expanded(
           child: Container(
-            height: 44,
+            height: 48,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.grey.shade200),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 4,
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: ElevatedButton(
-              onPressed: _isGoogleLoading ? null : _signInWithGoogle,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF0F172A),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isGoogleLoading ? null : _signInWithGoogle,
+                borderRadius: BorderRadius.circular(24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isGoogleLoading)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Color(0xFF4CAF50),
+                        ),
+                      )
+                    else ...[
+                      _buildGoogleLogo(),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Google',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              child: _isGoogleLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Color(0xFFFF9800),
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildGoogleLogo(),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Google',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
             ),
           ),
         ),
@@ -715,53 +685,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // Facebook button
         Expanded(
           child: Container(
-            height: 44,
+            height: 48,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
+              color: const Color(0xFF1877F2),
+              borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 4,
+                  color: const Color(0xFF1877F2).withValues(alpha: 0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: ElevatedButton(
-              onPressed: _isFacebookLoading ? null : _signInWithFacebook,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1877F2),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isFacebookLoading ? null : _signInWithFacebook,
+                borderRadius: BorderRadius.circular(24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isFacebookLoading)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    else ...[
+                      const Icon(Icons.facebook, color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Facebook',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              child: _isFacebookLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.facebook,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Facebook',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
             ),
           ),
         ),
@@ -777,7 +744,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Đã có tài khoản?',
           style: TextStyle(
             color: Color(0xFF64748B),
-            fontSize: 13,
+            fontSize: 14,
           ),
         ),
         TextButton(
@@ -787,8 +754,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: const Text(
             'Đăng nhập ngay',
             style: TextStyle(
-              color: Color(0xFFF44336),
-              fontSize: 13,
+              color: Color(0xFF4CAF50),
+              fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
           ),

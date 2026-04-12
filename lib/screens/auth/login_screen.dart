@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -85,9 +84,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loginWithGoogle() async {
     setState(() => _isGoogleLoading = true);
     try {
-      final _googleSignIn = GoogleSignIn();
-      await _googleSignIn.signOut(); // force account picker
-      final googleUser = await _googleSignIn.signIn();
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut(); // force account picker
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) return; // user cancelled
 
       final googleAuth = await googleUser.authentication;
@@ -199,85 +198,44 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: Stack(
-        children: [
-          // Background decorative circles
-          Positioned(
-            top: -40,
-            right: -40,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFFF9800).withOpacity(0.1),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                child: Container(),
-              ),
-            ),
+      resizeToAvoidBottomInset: false,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE8F5E9), Colors.white],
           ),
-          Positioned(
-            bottom: MediaQuery.of(context).size.height * 0.25,
-            left: -80,
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFF44336).withOpacity(0.05),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
-                child: Container(),
-              ),
-            ),
-          ),
-          // Main content
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 16),
-                            // Logo section
-                            _buildLogo(),
-                            const SizedBox(height: 8),
-                            // Title section
-                            _buildTitle(),
-                            const SizedBox(height: 20),
-                            // Form section
-                            _buildForm(),
-                            const SizedBox(height: 12),
-                            // Divider
-                            _buildDivider(),
-                            const SizedBox(height: 12),
-                            // Social buttons
-                            _buildSocialButtons(),
-                            const Spacer(),
-                            // Sign up link
-                            _buildSignUpLink(),
-                            const SizedBox(height: 20),
-                          ],
-                        ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
+                _buildLogo(),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildTitle(),
+                      _buildForm(),
+                      Column(
+                        children: [
+                          _buildDivider(),
+                          const SizedBox(height: 16),
+                          _buildSocialButtons(),
+                        ],
                       ),
-                    ),
+                    ],
                   ),
-                );
-              },
+                ),
+                _buildSignUpLink(),
+                const SizedBox(height: 16),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -290,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 80,
           child: ShaderMask(
             shaderCallback: (bounds) => const LinearGradient(
-              colors: [Color(0xFFFF9800), Color(0xFFF44336)],
+              colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
             ).createShader(bounds),
             child: const Icon(
               Icons.sports_soccer,
@@ -321,9 +279,19 @@ class _LoginScreenState extends State<LoginScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Color(0xFF0F172A),
-            fontSize: 28,
+            fontSize: 32,
             fontWeight: FontWeight.bold,
             height: 1.2,
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Đăng nhập để đặt sân ngay',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF64748B),
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ],
@@ -347,18 +315,18 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         Container(
-          height: 48,
+          height: 56,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(
               color: _emailError != null
                   ? const Color(0xFFF44336)
                   : const Color(0xFFE2E8F0)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 4,
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -367,16 +335,16 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: _emailController,
             decoration: const InputDecoration(
               hintText: 'Nhập email hoặc số điện thoại',
-              hintStyle: TextStyle(color: Color(0xFFA0A0A0)),
+              hintStyle: TextStyle(color: Color(0xFFA0AEC0)),
               border: InputBorder.none,
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 24,
-                vertical: 12,
+                vertical: 16,
               ),
             ),
             style: const TextStyle(
               color: Color(0xFF0F172A),
-              fontSize: 15,
+              fontSize: 16,
             ),
           ),
         ),
@@ -405,18 +373,18 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         Container(
-          height: 48,
+          height: 56,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(
               color: _passwordError != null
                   ? const Color(0xFFF44336)
                   : const Color(0xFFE2E8F0)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 4,
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -426,11 +394,11 @@ class _LoginScreenState extends State<LoginScreen> {
             obscureText: !_isPasswordVisible,
             decoration: InputDecoration(
               hintText: 'Nhập mật khẩu',
-              hintStyle: const TextStyle(color: Color(0xFFA0A0A0)),
+              hintStyle: const TextStyle(color: Color(0xFFA0AEC0)),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 24,
-                vertical: 12,
+                vertical: 16,
               ),
               suffixIcon: IconButton(
                 icon: Icon(
@@ -448,7 +416,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             style: const TextStyle(
               color: Color(0xFF0F172A),
-              fontSize: 15,
+              fontSize: 16,
             ),
           ),
         ),
@@ -475,8 +443,8 @@ class _LoginScreenState extends State<LoginScreen> {
               child: const Text(
                 'Quên mật khẩu?',
                 style: TextStyle(
-                  color: Color(0xFFF44336),
-                  fontSize: 13,
+                  color: Color(0xFF4CAF50),
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -487,15 +455,15 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 16),
         Container(
           width: double.infinity,
-          height: 50,
+          height: 56,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFFF9800), Color(0xFFF44336)],
+              colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
             ),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFF44336).withOpacity(0.3),
+                color: Color(0xFF4CAF50).withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -569,15 +537,15 @@ class _LoginScreenState extends State<LoginScreen> {
         // Google button
         Container(
           width: double.infinity,
-          height: 48,
+          height: 56,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(color: const Color(0xFFE2E8F0)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 4,
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -586,7 +554,7 @@ class _LoginScreenState extends State<LoginScreen> {
             color: Colors.transparent,
             child: InkWell(
               onTap: _isGoogleLoading ? null : _loginWithGoogle,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(28),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -596,7 +564,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
-                        color: Color(0xFFFF9800),
+                        color: Color(0xFF4CAF50),
                       ),
                     )
                   else ...[
@@ -620,13 +588,13 @@ class _LoginScreenState extends State<LoginScreen> {
         // Facebook button
         Container(
           width: double.infinity,
-          height: 48,
+          height: 56,
           decoration: BoxDecoration(
             color: const Color(0xFF1877F2),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1877F2).withOpacity(0.2),
+                color: const Color(0xFF1877F2).withValues(alpha: 0.2),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -636,7 +604,7 @@ class _LoginScreenState extends State<LoginScreen> {
             color: Colors.transparent,
             child: InkWell(
               onTap: _isFacebookLoading ? null : _loginWithFacebook,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(28),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -698,7 +666,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: const Text(
             'Đăng ký ngay',
             style: TextStyle(
-              color: Color(0xFFF44336),
+              color: Color(0xFF4CAF50),
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),

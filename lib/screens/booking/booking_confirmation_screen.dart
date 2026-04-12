@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../services/momo_service.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
   const BookingConfirmationScreen({super.key});
@@ -80,25 +82,6 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       }
     }
     return '${buffer.toString()}đ';
-  }
-
-  String _bookingTimeLabel() {
-    final slot = _selectedSlot;
-    final selectedDate = _selectedDate;
-    if (slot == null || selectedDate == null) {
-      return 'Chưa chọn lịch';
-    }
-
-    final start = slot['startTime']?.toString() ?? '';
-    final end = slot['endTime']?.toString() ?? '';
-    final day = selectedDate['day']?.toString() ?? '';
-    final date = selectedDate['date']?.toString() ?? '';
-    final month = selectedDate['month']?.toString() ?? '';
-
-    if (start.isEmpty || end.isEmpty || day.isEmpty || date.isEmpty || month.isEmpty) {
-      return 'Chưa chọn lịch';
-    }
-    return '$start - $end | $day, $date/$month';
   }
 
   String _subCourtLabel() {
@@ -231,18 +214,14 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   }
 
   Future<void> _submitBooking() async {
-    if (_isSubmitting) {
-      return;
-    }
+    if (_isSubmitting) return;
 
     final selectedDate = _selectedDate;
     final selectedSlot = _selectedSlot;
     final courtId = _courtId();
 
     if (selectedDate == null || selectedSlot == null || courtId.isEmpty) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Thiếu dữ liệu đặt sân. Vui lòng thử lại.'),
@@ -252,14 +231,159 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
+    if (_selectedPayment == 'momo') {
+      await _submitMoMoBooking(selectedDate, selectedSlot, courtId);
+    } else {
+      await _submitDirectBooking(selectedDate, selectedSlot, courtId);
+    }
+  }
+
+  // ── MoMo path: save as pending → open MoMo app ──────────────────────────
+  Future<void> _submitMoMoBooking(
+    Map<String, dynamic> selectedDate,
+    Map<String, dynamic> selectedSlot,
+    String courtId,
+  ) async {
     final discountAmount = _voucherDiscountAmount();
     final finalPayable = _finalPayableAmount();
 
-    final bookingPayload = <String, dynamic>{
+    final bookingPayload = _buildBookingPayload(
+      selectedDate: selectedDate,
+      selectedSlot: selectedSlot,
+      courtId: courtId,
+      discountAmount: discountAmount,
+      finalPayable: finalPayable,
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+    );
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final bookingRef = firestore.collection('bookings').doc();
+
+      await _runBookingTransaction(
+        firestore: firestore,
+        bookingRef: bookingRef,
+        bookingPayload: bookingPayload,
+      );
+
+      // Call MoMo API
+      final payUrl = await MoMoService.createMoMoPayment(
+        orderId: bookingRef.id,
+        amount: finalPayable,
+        orderInfo: 'Đặt sân ${_courtName()}',
+      );
+
+      if (!await launchUrl(
+        Uri.parse(payUrl),
+        mode: LaunchMode.externalApplication,
+      )) {
+        throw Exception('Không thể mở ứng dụng MoMo. Vui lòng thử lại.');
+      }
+
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đang chuyển đến MoMo để hoàn tất thanh toán...'),
+            backgroundColor: Color(0xFFA50064),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _isSubmitting = false);
+    }
+  }
+
+  // ── Direct path (ZaloPay / VNPAY / Banking): save as confirmed ──────────
+  Future<void> _submitDirectBooking(
+    Map<String, dynamic> selectedDate,
+    Map<String, dynamic> selectedSlot,
+    String courtId,
+  ) async {
+    final discountAmount = _voucherDiscountAmount();
+    final finalPayable = _finalPayableAmount();
+
+    final bookingPayload = _buildBookingPayload(
+      selectedDate: selectedDate,
+      selectedSlot: selectedSlot,
+      courtId: courtId,
+      discountAmount: discountAmount,
+      finalPayable: finalPayable,
+      status: 'confirmed',
+      paymentStatus: 'paid',
+    );
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final bookingRef = firestore.collection('bookings').doc();
+
+      await _runBookingTransaction(
+        firestore: firestore,
+        bookingRef: bookingRef,
+        bookingPayload: bookingPayload,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacementNamed(
+        context,
+        '/booking-success',
+        arguments: {
+          'bookingId': bookingRef.id,
+          'court': _court,
+          'selectedDate': selectedDate,
+          'selectedSlot': selectedSlot,
+          'selectedSubCourt': _selectedSubCourt,
+          'duration': _duration,
+          'basePrice': _totalPrice,
+          'discountAmount': discountAmount,
+          'totalPrice': finalPayable,
+          'selectedVoucher': _selectedVoucher,
+          'paymentMethod': _selectedPayment,
+          'paymentMethodLabel': _paymentMethodLabel(),
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      String errorMsg = 'Không thể tạo đơn đặt sân. Vui lòng thử lại.';
+      if (e is Exception) {
+        final msg = e.toString();
+        if (msg.contains('voucher_already_used_by_user')) {
+          errorMsg = 'Bạn đã sử dụng voucher này rồi. Mỗi người chỉ dùng được một lần.';
+        } else if (msg.contains('voucher_out_of_quantity')) {
+          errorMsg = 'Voucher đã hết lượt sử dụng. Vui lòng chọn voucher khác.';
+        } else if (msg.contains('voucher_not_found')) {
+          errorMsg = 'Voucher không còn hợp lệ. Vui lòng chọn lại.';
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+      );
+      setState(() => _isSubmitting = false);
+    }
+  }
+
+  // ── Shared helpers ───────────────────────────────────────────────────────
+  Map<String, dynamic> _buildBookingPayload({
+    required Map<String, dynamic> selectedDate,
+    required Map<String, dynamic> selectedSlot,
+    required String courtId,
+    required int discountAmount,
+    required int finalPayable,
+    required String status,
+    required String paymentStatus,
+  }) {
+    return {
       'userId': FirebaseAuth.instance.currentUser?.uid ?? '',
       'courtId': courtId,
       'courtName': _courtName(),
@@ -281,87 +405,74 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       'voucherTitle': _selectedVoucher?['title']?.toString() ?? '',
       'paymentMethod': _selectedPayment,
       'paymentMethodLabel': _paymentMethodLabel(),
-      'status': 'confirmed',
-      'paymentStatus': 'paid',
+      'status': status,
+      'paymentStatus': paymentStatus,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
 
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final bookingRef = firestore.collection('bookings').doc();
-      final selectedVoucherId = _selectedVoucher?['id']?.toString() ?? '';
+  Future<void> _runBookingTransaction({
+    required FirebaseFirestore firestore,
+    required DocumentReference bookingRef,
+    required Map<String, dynamic> bookingPayload,
+  }) async {
+    final selectedVoucherId = _selectedVoucher?['id']?.toString() ?? '';
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-      await firestore.runTransaction((transaction) async {
-        if (selectedVoucherId.isNotEmpty) {
-          final voucherRef = firestore.collection('vouchers').doc(selectedVoucherId);
-          final voucherSnapshot = await transaction.get(voucherRef);
-
-          if (!voucherSnapshot.exists) {
-            throw Exception('voucher_not_found');
-          }
-
-          final voucherData = voucherSnapshot.data() ?? <String, dynamic>{};
-          final totalQuantity = _toInt(voucherData['totalQuantity']);
-          final usedQuantity = _toInt(voucherData['usedQuantity']);
-
-          if (totalQuantity <= 0) {
-            throw Exception('voucher_out_of_quantity');
-          }
-
-          transaction.update(voucherRef, {
-            'totalQuantity': totalQuantity - 1,
-            'usedQuantity': usedQuantity + 1,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+    if (selectedVoucherId.isNotEmpty && currentUserId.isNotEmpty) {
+      final maxPerUser = _toInt(_selectedVoucher?['maxPerUser'], fallback: 1);
+      if (maxPerUser > 0) {
+        final usageSnapshot = await firestore
+            .collection('bookings')
+            .where('userId', isEqualTo: currentUserId)
+            .where('voucherId', isEqualTo: selectedVoucherId)
+            .limit(1)
+            .get();
+        if (usageSnapshot.docs.isNotEmpty) {
+          throw Exception('voucher_already_used_by_user');
         }
-
-        transaction.set(bookingRef, bookingPayload);
-      });
-
-      if (!mounted) {
-        return;
       }
-
-      Navigator.pushReplacementNamed(
-        context,
-        '/booking-success',
-        arguments: {
-          'bookingId': bookingRef.id,
-          'court': _court,
-          'selectedDate': selectedDate,
-          'selectedSlot': selectedSlot,
-          'selectedSubCourt': _selectedSubCourt,
-          'duration': _duration,
-          'basePrice': _totalPrice,
-          'discountAmount': discountAmount,
-          'totalPrice': finalPayable,
-          'selectedVoucher': _selectedVoucher,
-          'paymentMethod': _selectedPayment,
-          'paymentMethodLabel': _paymentMethodLabel(),
-        },
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Không thể tạo đơn đặt sân. Vui lòng thử lại.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      setState(() {
-        _isSubmitting = false;
-      });
     }
+
+    await firestore.runTransaction((transaction) async {
+      if (selectedVoucherId.isNotEmpty) {
+        final voucherRef =
+            firestore.collection('vouchers').doc(selectedVoucherId);
+        final voucherSnapshot = await transaction.get(voucherRef);
+
+        if (!voucherSnapshot.exists) throw Exception('voucher_not_found');
+
+        final voucherData =
+            voucherSnapshot.data() ?? <String, dynamic>{};
+        final totalQuantity = _toInt(voucherData['totalQuantity']);
+        final usedQuantity = _toInt(voucherData['usedQuantity']);
+
+        if (totalQuantity <= 0) throw Exception('voucher_out_of_quantity');
+
+        transaction.update(voucherRef, {
+          'totalQuantity': totalQuantity - 1,
+          'usedQuantity': usedQuantity + 1,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      transaction.set(bookingRef, bookingPayload);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: Stack(
+      backgroundColor: const Color(0xFFF0F9F1),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF0FDF4), Color(0xFFF9F9F9)],
+          ),
+        ),
+        child: Stack(
         children: [
           Positioned.fill(
             child: Column(
@@ -393,6 +504,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
           _buildFixedBottomButton(),
         ],
       ),
+      ),
     );
   }
 
@@ -403,10 +515,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       right: 0,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF8F6).withValues(alpha: 0.8),
-          border: const Border(
-            bottom: BorderSide(color: Color(0xFFFFE0CC), width: 1),
-          ),
+          color: Colors.transparent,
         ),
         child: SafeArea(
           bottom: false,
@@ -414,27 +523,26 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                InkWell(
+                GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
+                      shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 4,
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
                       ],
-                      border: Border.all(
-                        color: Colors.black.withValues(alpha: 0.05),
-                      ),
                     ),
                     child: const Icon(
-                      Icons.chevron_left,
-                      color: Color(0xFF1c170d),
+                      Icons.arrow_back,
+                      color: Color(0xFF1A1C1C),
+                      size: 20,
                     ),
                   ),
                 ),
@@ -445,7 +553,8 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1c170d),
+                      color: Color(0xFF1A1C1C),
+                      letterSpacing: -0.3,
                     ),
                   ),
                 ),
@@ -468,11 +577,12 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFE0CC)),
+        border: Border.all(color: const Color(0xFFC8E6C9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 4,
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -487,6 +597,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               width: 96,
               height: 96,
               fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 96,
+                height: 96,
+                color: const Color(0xFFC8E6C9),
+                child: const Icon(Icons.sports_soccer,
+                    color: Color(0xFF4CAF50), size: 32),
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -499,54 +616,55 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1c170d),
+                    color: Color(0xFF1A1C1C),
                     height: 1.2,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _courtAddress(),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      size: 14,
-                      color: Color(0xFFFF9800),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _bookingTimeLabel(),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFFFF9800),
+                    const Icon(Icons.location_on,
+                        size: 14, color: Color(0xFF6F7A6B)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        _courtAddress(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6F7A6B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _buildInfoPill(
+                      Icons.schedule,
+                      '${_selectedSlot?['startTime'] ?? ''} - ${_selectedSlot?['endTime'] ?? ''}',
+                    ),
+                    _buildInfoPill(
+                      Icons.calendar_today,
+                      '${_selectedDate?['day'] ?? ''}, ${_selectedDate?['date'] ?? ''}/${_selectedDate?['month'] ?? ''}',
                     ),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Icon(
-                      sportIcon,
-                      size: 14,
-                      color: const Color(0xFF6B7280),
-                    ),
+                    Icon(sportIcon, size: 14, color: const Color(0xFF6F7A6B)),
                     const SizedBox(width: 6),
                     Text(
                       _subCourtLabel(),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF6B7280),
+                        color: Color(0xFF6F7A6B),
                       ),
                     ),
                   ],
@@ -559,18 +677,44 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     );
   }
 
+  Widget _buildInfoPill(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFF006E1C)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF006E1C),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPaymentMethodSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
-          padding: EdgeInsets.only(left: 4, bottom: 12),
+          padding: EdgeInsets.only(left: 4, bottom: 10),
           child: Text(
-            'Phương thức thanh toán',
+            'PHƯƠNG THỨC THANH TOÁN',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1c170d),
+              letterSpacing: 1.0,
+              color: Color(0xFF6F7A6B),
             ),
           ),
         ),
@@ -578,7 +722,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFFE0CC)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF006E1C).withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -586,20 +736,20 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 'momo',
                 'Ví MoMo',
                 const Color(0xFFA50064),
-                'MOMO',
+                'MoMo',
               ),
               _buildDivider(),
               _buildPaymentOption(
                 'zalopay',
                 'ZaloPay',
-                const Color(0xFF008FE5),
+                const Color(0xFF0081C9),
                 'Zalo',
               ),
               _buildDivider(),
               _buildPaymentOption(
                 'vnpay',
-                'VNPAY',
-                const Color(0xFF005BAA),
+                'VNPAY-QR',
+                const Color(0xFF003B8E),
                 'VNPAY',
               ),
               _buildDivider(),
@@ -653,9 +803,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               child: Text(
                 label,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF1c170d),
+                  color: Color(0xFF1A1C1C),
                 ),
               ),
             ),
@@ -669,7 +819,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                   _selectedPayment = newValue!;
                 });
               },
-              activeColor: const Color(0xFFFF9800),
+              activeColor: const Color(0xFF4CAF50),
             ),
           ],
         ),
@@ -679,6 +829,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
   Widget _buildPaymentOptionWithIcon(String value, String label, IconData icon) {
     return InkWell(
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
       onTap: () {
         setState(() {
           _selectedPayment = value;
@@ -692,13 +843,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: const Color(0xFFEEEEEE),
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
               child: Icon(
                 icon,
-                color: const Color(0xFF6B7280),
+                color: const Color(0xFF6F7A6B),
                 size: 20,
               ),
             ),
@@ -707,23 +858,21 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               child: Text(
                 label,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF1c170d),
+                  color: Color(0xFF1A1C1C),
                 ),
               ),
             ),
             Radio<String>(
               value: value,
-              // ignore: deprecated_member_use
               groupValue: _selectedPayment,
-              // ignore: deprecated_member_use
               onChanged: (String? newValue) {
                 setState(() {
                   _selectedPayment = newValue!;
                 });
               },
-              activeColor: const Color(0xFFFF9800),
+              activeColor: const Color(0xFF4CAF50),
             ),
           ],
         ),
@@ -734,34 +883,42 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   Widget _buildDivider() {
     return Container(
       height: 1,
-      color: const Color(0xFFF9FAFB),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      color: const Color(0xFFF3F3F3),
     );
   }
 
   Widget _buildVoucherSection() {
     return InkWell(
       onTap: _openVoucherSelection,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFE0CC)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF006E1C).withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(20),
+                color: const Color(0xFF994700).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: const Icon(
                 Icons.card_giftcard,
-                color: Color(0xFFFF9800),
-                size: 20,
+                color: Color(0xFF994700),
+                size: 22,
               ),
             ),
             const SizedBox(width: 12),
@@ -770,13 +927,23 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
+                    'SPORTSET Voucher',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.0,
+                      color: Color(0xFF994700),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
                     _voucherTitle(),
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: _selectedVoucher == null
-                          ? const Color(0xFF9CA3AF)
-                          : const Color(0xFFF57C00),
+                          ? const Color(0xFF1A1C1C)
+                          : const Color(0xFF994700),
                     ),
                   ),
                   if (_selectedVoucher != null)
@@ -784,26 +951,16 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                       _voucherSubtitle(),
                       style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF6B7280),
+                        color: Color(0xFF6F7A6B),
                       ),
                     ),
                 ],
               ),
             ),
-            Text(
-              _selectedVoucher == null ? 'Chọn voucher' : 'Đổi voucher',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF9CA3AF),
-              ),
-            ),
-            const SizedBox(width: 4),
             const Icon(
               Icons.chevron_right,
-              color: Color(0xFF9CA3AF),
-              size: 18,
+              color: Color(0xFF6F7A6B),
+              size: 20,
             ),
           ],
         ),
@@ -822,7 +979,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFE0CC)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF006E1C).withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -831,9 +994,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
           const Text(
             'Chi tiết thanh toán',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1c170d),
+              color: Color(0xFF1A1C1C),
             ),
           ),
           const SizedBox(height: 16),
@@ -873,9 +1036,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 Text(
                   _formatCurrency(grandTotal),
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFFFF9800),
+                    color: Color(0xFF006E1C),
                   ),
                 ),
               ],
@@ -916,16 +1079,12 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       right: 0,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            top: BorderSide(
-              color: const Color(0xFFF9FAFB),
-            ),
-          ),
+          color: Colors.white.withValues(alpha: 0.9),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 15,
+              color: const Color(0xFF006E1C).withValues(alpha: 0.08),
+              blurRadius: 24,
               offset: const Offset(0, -4),
             ),
           ],
@@ -933,62 +1092,90 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
         child: SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-            child: Container(
-              height: 56,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF9800).withValues(alpha: 0.3),
-                    blurRadius: 25,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitBooking,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                ),
-                child: _isSubmitting
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Thanh toán ngay',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(
-                            Icons.verified_user,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ],
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
                       ),
-              ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting ? null : _submitBooking,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white),
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.verified_user,
+                                    color: Colors.white, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Thanh toán ngay',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Icon(Icons.info_outline,
+                          size: 14, color: Color(0xFF6F7A6B)),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Bằng việc nhấn “Thanh toán ngay”, bạ đồng ý với Điều khoản dịch vụ và Chính sách hoàn tiền.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF6F7A6B),
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -996,3 +1183,4 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     );
   }
 }
+

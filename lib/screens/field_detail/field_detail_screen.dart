@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'dart:ui';
+import 'package:geolocator/geolocator.dart';
 
 class FieldDetailScreen extends StatefulWidget {
   const FieldDetailScreen({super.key});
@@ -15,13 +19,173 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
   static const String _fallbackImage =
       'https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80';
 
+  // Live stats
+  double? _avgRating;
+  int _reviewCount = 0;
+  String? _distance;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reviewSub;
+  bool _dependenciesLoaded = false;
+
+  // Favorite
+  bool _isFavorite = false;
+  bool _favoriteLoading = false;
+
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_dependenciesLoaded) {
+      _dependenciesLoaded = true;
+      final court = _readCourtData(context);
+      _subscribeReviews(court['id']?.toString() ?? '');
+      _fetchDistance(court);
+      _loadFavoriteState(court['id']?.toString() ?? '');
+    }
+  }
+
+  Future<void> _loadFavoriteState(String courtId) async {
+    if (courtId.isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('favorites')
+        .doc(uid)
+        .collection('courts')
+        .doc(courtId)
+        .get();
+    if (mounted) setState(() => _isFavorite = doc.exists);
+  }
+
+  Future<void> _toggleFavorite(Map<String, dynamic> court) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final courtId = court['id']?.toString() ?? '';
+    if (courtId.isEmpty) return;
+    setState(() => _favoriteLoading = true);
+    final ref = FirebaseFirestore.instance
+        .collection('favorites')
+        .doc(uid)
+        .collection('courts')
+        .doc(courtId);
+    try {
+      if (_isFavorite) {
+        await ref.delete();
+        if (mounted) setState(() => _isFavorite = false);
+      } else {
+        final image = (court['imageUrl'] ?? court['image'] ?? '').toString();
+        final priceVal = court['pricePerHour'] ?? court['price'];
+        String price = '';
+        if (priceVal is num) {
+          price = priceVal >= 1000
+              ? '${(priceVal / 1000).round()}K/h'
+              : '${priceVal.round()}/h';
+        } else {
+          price = priceVal?.toString() ?? '';
+        }
+        await ref.set({
+          'courtId': courtId,
+          'name': court['name']?.toString() ?? '',
+          'image': image,
+          'address': court['address']?.toString() ?? '',
+          'rating': (court['rating'] as num?)?.toDouble() ?? 0.0,
+          'price': price,
+          'facilityId': court['facilityId']?.toString() ?? '',
+          'savedAt': FieldValue.serverTimestamp(),
+        });
+        if (mounted) setState(() => _isFavorite = true);
+      }
+    } finally {
+      if (mounted) setState(() => _favoriteLoading = false);
+    }
+  }
+
+  void _subscribeReviews(String courtId) {
+    if (courtId.isEmpty) return;
+    _reviewSub?.cancel();
+    _reviewSub = FirebaseFirestore.instance
+        .collection('reviews')
+        .where('fieldId', isEqualTo: courtId)
+        .snapshots()
+        .listen((snapshot) {
+      final docs = snapshot.docs;
+      final avg = docs.isEmpty
+          ? 0.0
+          : docs.fold<double>(
+                  0,
+                  (acc, d) =>
+                      acc + ((d.data()['rating'] as num?)?.toDouble() ?? 0)) /
+              docs.length;
+      if (mounted) {
+        setState(() {
+          _avgRating = avg;
+          _reviewCount = docs.length;
+        });
+      }
+    });
+  }
+
+  Future<void> _fetchDistance(Map<String, dynamic> court) async {
+    // Try lat/lng directly on court first, else fetch from parent facility
+    double? lat = (court['latitude'] as num?)?.toDouble();
+    double? lng = (court['longitude'] as num?)?.toDouble();
+
+    if (lat == null || lng == null) {
+      final facilityId = court['facilityId']?.toString() ?? '';
+      if (facilityId.isEmpty) return;
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('facilities')
+            .doc(facilityId)
+            .get();
+        final data = doc.data();
+        lat = (data?['latitude'] as num?)?.toDouble();
+        lng = (data?['longitude'] as num?)?.toDouble();
+      } catch (_) {
+        return;
+      }
+    }
+
+    if (lat == null || lng == null) return;
+
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.low),
+      );
+      final km = _distanceKm(pos.latitude, pos.longitude, lat, lng);
+      final label = km < 1
+          ? '${(km * 1000).round()} m'
+          : '${km.toStringAsFixed(1)} km';
+      if (mounted) setState(() => _distance = label);
+    } catch (_) {}
+  }
+
+  double _distanceKm(
+      double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371.0;
+    final dLat = (lat2 - lat1) * pi / 180;
+    final dLng = (lng2 - lng1) * pi / 180;
+    final sinDLat = sin(dLat / 2);
+    final sinDLng = sin(dLng / 2);
+    final c = 2 *
+        asin(sqrt(sinDLat * sinDLat +
+            cos(lat1 * pi / 180) *
+                cos(lat2 * pi / 180) *
+                sinDLng *
+                sinDLng));
+    return r * c;
   }
 
   @override
   void dispose() {
+    _reviewSub?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -31,8 +195,16 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     final court = _readCourtData(context);
     final images = _resolveImages(court);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFE8F5E9), Colors.white],
+        ),
+      ),
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           SingleChildScrollView(
@@ -49,7 +221,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           _buildBottomBar(),
         ],
       ),
-    );
+    ));
   }
 
   Map<String, dynamic> _readCourtData(BuildContext context) {
@@ -357,86 +529,62 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          offset: const Offset(0, 2),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.chevron_left, color: Color(0xFF1A237E)),
-                      onPressed: () => Navigator.pop(context),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
                 ),
               ),
               Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              offset: const Offset(0, 2),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.share, color: Color(0xFF1A237E)),
-                          onPressed: () {},
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.share, color: Colors.white),
+                      onPressed: () {},
+                      padding: EdgeInsets.zero,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              offset: const Offset(0, 2),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.favorite, color: Colors.red),
-                          onPressed: () {},
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
                     ),
+                    child: _favoriteLoading
+                        ? const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.red),
+                          )
+                        : IconButton(
+                            icon: Icon(
+                              _isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: Colors.red,
+                            ),
+                            onPressed: () {
+                              final court = _readCourtData(context);
+                              _toggleFavorite(court);
+                            },
+                            padding: EdgeInsets.zero,
+                          ),
                   ),
                 ],
               ),
@@ -469,38 +617,48 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               );
             },
           ),
+          // Gradient overlay at bottom
           Positioned(
-            bottom: 24,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 80,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0x99000000)],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 16,
             left: 0,
             right: 0,
             child: Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(images.length, (index) {
-                        return Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _currentImageIndex == index
-                                ? Colors.white
-                                : Colors.white.withValues(alpha: 0.5),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(images.length, (index) {
+                    return Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _currentImageIndex == index
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.5),
+                      ),
+                    );
+                  }),
                 ),
               ),
             ),
@@ -519,20 +677,31 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     return Container(
       transform: Matrix4.translationValues(0, -16, 0),
       decoration: const BoxDecoration(
-        color: Color(0xFFFFF8F6),
+        color: Colors.transparent,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4CAF50).withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               name,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A237E),
+                color: Color(0xFF1A1C1C),
               ),
             ),
             if (facilityName.isNotEmpty || sportType.isNotEmpty) ...[
@@ -577,7 +746,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             const SizedBox(height: 20),
             _buildAmenities(court),
             const SizedBox(height: 12),
-            _buildReviews(),
+            _buildReviews(court['id']?.toString() ?? ''),
           ],
         ),
       ),
@@ -585,11 +754,14 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
   }
 
   Widget _buildStatsRow(Map<String, dynamic> court) {
-    final ratingValue = court['rating'];
-    final rating = ratingValue is num
-        ? ratingValue.toStringAsFixed(1)
-        : (ratingValue?.toString() ?? '0.0');
-    final distance = (court['distance'] ?? '-- km').toString();
+    final ratingDisplay = _avgRating != null
+        ? _avgRating!.toStringAsFixed(1)
+        : (() {
+            final v = court['rating'];
+            return v is num ? v.toStringAsFixed(1) : (v?.toString() ?? '--');
+          })();
+    final reviewLabel = _reviewCount > 0 ? '($_reviewCount)' : '';
+    final distance = _distance ?? (court['distance']?.toString() ?? '--');
     final statusText = _statusLabel(court);
     final statusColor = _statusColor(court);
 
@@ -597,8 +769,8 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: const Color(0xFFFFE0B2)),
-          bottom: BorderSide(color: const Color(0xFFFFE0B2)),
+          top: BorderSide(color: const Color(0xFFC8E6C9)),
+          bottom: BorderSide(color: const Color(0xFFC8E6C9)),
         ),
       ),
       child: Row(
@@ -609,15 +781,24 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.star, color: Color(0xFFFF9800), size: 18),
+                    const Icon(Icons.star, color: Color(0xFF4CAF50), size: 18),
                     const SizedBox(width: 4),
                     Text(
-                      rating,
-                      style: TextStyle(
+                      ratingDisplay,
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    if (reviewLabel.isNotEmpty) ...[                      const SizedBox(width: 2),
+                      Text(
+                        reviewLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -636,7 +817,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           Container(
             width: 1,
             height: 40,
-            color: const Color(0xFFFFE0B2),
+            color: const Color(0xFFC8E6C9),
           ),
           Expanded(
             child: Column(
@@ -644,15 +825,26 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.near_me, color: Color(0xFF1A237E), size: 18),
+                    const Icon(Icons.near_me, color: Color(0xFF4CAF50), size: 18),
                     const SizedBox(width: 4),
-                    Text(
-                      distance,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    _distance == null &&
+                            ((court['latitude'] as num?) != null ||
+                                (court['facilityId']?.toString() ?? '').isNotEmpty)
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Color(0xFF4CAF50),
+                            ),
+                          )
+                        : Text(
+                            distance,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -671,7 +863,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           Container(
             width: 1,
             height: 40,
-            color: const Color(0xFFFFE0B2),
+            color: const Color(0xFFC8E6C9),
           ),
           Expanded(
             child: Column(
@@ -717,16 +909,33 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1A237E),
+            color: Color(0xFF2E7D32),
           ),
         ),
         const SizedBox(height: 12),
-        Text(
-          _description(court),
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey[600],
-            height: 1.6,
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: const Border(
+              left: BorderSide(color: Color(0xFF4CAF50), width: 4),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            _description(court),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              height: 1.6,
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -735,7 +944,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Color(0xFFFF9800),
+            color: Color(0xFF4CAF50),
           ),
         ),
       ],
@@ -753,44 +962,58 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1A237E),
+            color: Color(0xFF1A1C1C),
           ),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 3.0,
           children: amenities.map((amenity) {
             return Container(
-              constraints: const BoxConstraints(minHeight: 34, minWidth: 96),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFFE0B2)),
+                color: Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    offset: const Offset(0, 1),
-                    blurRadius: 4,
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    amenity['icon'],
-                    color: const Color(0xFFFF9800),
-                    size: 16,
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF18A5A7).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      amenity['icon'] as IconData,
+                      color: const Color(0xFF18A5A7),
+                      size: 18,
+                    ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    amenity['label'],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      amenity['label'] as String,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1C1C),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -815,21 +1038,57 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1A237E),
+            color: Color(0xFF1A1C1C),
           ),
         ),
         const SizedBox(height: 12),
         if (hasDetailPricing) ...[
+          // Weekday header
+          Row(
+            children: [
+              const Icon(Icons.calendar_month, size: 20, color: Color(0xFF4CAF50)),
+              const SizedBox(width: 8),
+              Text(
+                'BẢNG GIÁ NGÀY THƯỜNG',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600],
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           _buildPricingGroup(
             title: 'Giá ngày thường',
             items: weekdayPricing,
             emptyText: 'Chưa cập nhật giá ngày thường',
+            isWeekend: false,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          // Weekend header
+          Row(
+            children: [
+              const Icon(Icons.event_available, size: 20, color: Color(0xFFBA1A1A)),
+              const SizedBox(width: 8),
+              Text(
+                'BẢNG GIÁ CUỐI TUẦN',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600],
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           _buildPricingGroup(
             title: 'Giá cuối tuần',
             items: weekendPricing,
             emptyText: 'Chưa cập nhật giá cuối tuần',
+            isWeekend: true,
           ),
         ] else
           Container(
@@ -838,14 +1097,14 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFFE0B2)),
+              border: Border.all(color: const Color(0xFFC8E6C9)),
             ),
             child: Text(
               'Giá tham khảo: ${_priceLabel(court)}',
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFFFF9800),
+                color: Color(0xFF4CAF50),
               ),
             ),
           ),
@@ -857,14 +1116,17 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     required String title,
     required List<Map<String, dynamic>> items,
     required String emptyText,
+    bool isWeekend = false,
   }) {
+    const weekendColor = Color(0xFFBA1A1A);
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFFE0B2)),
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -876,48 +1138,90 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A237E),
-            ),
-          ),
-          const SizedBox(height: 10),
           if (items.isEmpty)
             Text(
               emptyText,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
             )
           else
-            ...items.map((item) {
+            ...items.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+
+              Color itemColor;
+              Color itemBg;
+              Color itemBorder;
+              IconData timeIcon;
+
+              if (isWeekend) {
+                itemColor = weekendColor;
+                itemBg = weekendColor.withValues(alpha: 0.05);
+                itemBorder = weekendColor.withValues(alpha: 0.1);
+                timeIcon = Icons.wb_sunny;
+              } else if (index == 0) {
+                itemColor = const Color(0xFF4CAF50);
+                itemBg = const Color(0xFF4CAF50).withValues(alpha: 0.05);
+                itemBorder = const Color(0xFF4CAF50).withValues(alpha: 0.1);
+                timeIcon = Icons.wb_sunny;
+              } else if (index == items.length - 1) {
+                itemColor = const Color(0xFF18A5A7);
+                itemBg = const Color(0xFF18A5A7).withValues(alpha: 0.05);
+                itemBorder = const Color(0xFF18A5A7).withValues(alpha: 0.1);
+                timeIcon = Icons.dark_mode;
+              } else {
+                itemColor = const Color(0xFFF59E0B);
+                itemBg = Colors.white.withValues(alpha: 0.5);
+                itemBorder = const Color(0xFF6F7A6B).withValues(alpha: 0.1);
+                timeIcon = Icons.light_mode;
+              }
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _pricingTimeRange(item),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[700],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: itemBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: itemBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(timeIcon, color: itemColor, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _pricingTimeRange(item),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1A1C1C),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _formatMoney(item['price']),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFFF9800),
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: _formatMoney(item['price']),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: itemColor,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '/giờ',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             }),
@@ -926,56 +1230,152 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     );
   }
 
-  Widget _buildReviews() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  String _timeAgo(Timestamp? ts) {
+    if (ts == null) return '';
+    final diff = DateTime.now().difference(ts.toDate());
+    if (diff.inMinutes < 60) return '${diff.inMinutes} phút trước';
+    if (diff.inHours < 24) return '${diff.inHours} giờ trước';
+    if (diff.inDays == 1) return 'Hôm qua';
+    if (diff.inDays < 7) return '${diff.inDays} ngày trước';
+    final d = ts.toDate();
+    return '${d.day}/${d.month}/${d.year}';
+  }
+
+  Widget _buildReviews(String courtId) {
+    if (courtId.isEmpty) return const SizedBox.shrink();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('reviews')
+          .where('fieldId', isEqualTo: courtId)
+          .limit(20)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'Lỗi tải đánh giá: ${snapshot.error}',
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          );
+        }
+        final docs = (snapshot.data?.docs ?? [])
+          ..sort((a, b) {
+            final ta = a.data()['createdAt'];
+            final tb = b.data()['createdAt'];
+            if (ta is Timestamp && tb is Timestamp) {
+              return tb.compareTo(ta);
+            }
+            return 0;
+          });
+
+        final avgRating = docs.isEmpty
+            ? 0.0
+            : docs.fold<double>(
+                    0,
+                    (acc, d) =>
+                        acc + ((d.data()['rating'] as num?)?.toDouble() ?? 0)) /
+                docs.length;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Đánh giá cộng đồng',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A237E),
-              ),
-            ),
-            TextButton(
-              onPressed: () {},
-              child: const Text(
-                'Xem tất cả',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF9800),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Đánh giá cộng đồng',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32),
+                      ),
+                    ),
+                    if (docs.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.star,
+                                size: 14, color: Color(0xFF4CAF50)),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${avgRating.toStringAsFixed(1)} (${docs.length} đánh giá)',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF4CAF50),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
-              ),
+              ],
             ),
+            const SizedBox(height: 16),
+            if (snapshot.connectionState == ConnectionState.waiting)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF4CAF50),
+                    strokeWidth: 2,
+                  ),
+                ),
+              )
+            else if (docs.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFC8E6C9)),
+                ),
+                child: const Text(
+                  'Chưa có đánh giá nào. Hãy là người đầu tiên!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              )
+            else
+              ...docs.map((doc) {
+                final data = doc.data();
+                final rawImages = data['images'];
+                final images = rawImages is List
+                    ? rawImages
+                        .map((e) => e.toString())
+                        .where((e) => e.isNotEmpty)
+                        .toList()
+                    : <String>[];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _buildReviewCard(
+                    name: (data['userName'] ?? 'Ẩn danh').toString(),
+                    avatar: (data['userAvatar'] ?? '').toString(),
+                    rating: (data['rating'] as num?)?.toInt() ?? 0,
+                    time: _timeAgo(data['createdAt'] is Timestamp ? data['createdAt'] as Timestamp : null),
+                    content: (data['review'] ?? '').toString(),
+                    images: images,
+                    replied: data['replied'] == true,
+                    reply: data['reply']?.toString(),
+                  ),
+                );
+              }),
           ],
-        ),
-        const SizedBox(height: 16),
-        _buildReviewCard(
-          name: 'Hoàng Nam',
-          avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCKRmp4nEVBG-6uZ-8CWBD4oUrLxTb23Yg-C-i_07c59-76-Z848HbHMok4RKJY3bNQu34c_sal_V2_gKYpo_UVyKgjJ_wleR_H870lmfJZEwHox2Brd0o4fH4KSrJWIoR2hwWfRI1cNkU95hWSboXt_sjVL6TohZZ2O9SfKvxe0_Ej8hm_MWL6V_Y0-YFRZYimbOEoK60_5vS_Z3qdpbYV48_yQHyIMTxiBBeUx2NdjIPTde0xIxHMgef_w4piWWcxIVIKoBasGDoL',
-          rating: 5,
-          time: '2 ngày trước',
-          content: 'Sân đẹp, cỏ mới đá rất êm chân. Nhân viên nhiệt tình, bãi giữ xe thoải mái không phải chờ đợi lâu.',
-          images: [
-            'https://htsport.vn/wp-content/uploads/2019/12/25-kich-thuoc-san-bong-7-nguoi-2.jpg',
-            'https://www.aisedulaos.com/img/Sport-field-ais.jpg',
-            'https://co-nhan-tao.com/wp-content/uploads/2021/08/san-bong-7-nguoi.jpg',
-          ],
-        ),
-        const SizedBox(height: 24),
-        _buildReviewCard(
-          name: 'Minh Tuấn',
-          initials: 'MT',
-          rating: 4,
-          time: '1 tuần trước',
-          content: 'Đèn hơi chói một chút ở góc sân số 3, nhưng nhìn chung chất lượng sân rất tốt so với tầm giá.',
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -987,13 +1387,15 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     required String time,
     required String content,
     List<String>? images,
+    bool replied = false,
+    String? reply,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFE0B2)),
+        border: Border.all(color: const Color(0xFFC8E6C9)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -1010,18 +1412,23 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             children: [
               Row(
                 children: [
-                  avatar != null
+                  (avatar != null && avatar.isNotEmpty)
                       ? Container(
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFFFE0B2)),
+                            border: Border.all(color: const Color(0xFFC8E6C9)),
                           ),
                           child: ClipOval(
                             child: Image.network(
                               avatar,
                               fit: BoxFit.cover,
+                              errorBuilder: (context, error, stack) => Container(
+                                color: const Color(0xFFC8E6C9),
+                                child: const Icon(Icons.person,
+                                    size: 20, color: Color(0xFF4CAF50)),
+                              ),
                             ),
                           ),
                         )
@@ -1029,14 +1436,14 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                           width: 40,
                           height: 40,
                           decoration: const BoxDecoration(
-                            color: Color(0xFFFFE0B2),
+                            color: Color(0xFFC8E6C9),
                             shape: BoxShape.circle,
                           ),
                           child: Center(
                             child: Text(
                               initials ?? '',
                               style: const TextStyle(
-                                color: Color(0xFFFF9800),
+                                color: Color(0xFF4CAF50),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1060,7 +1467,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                             Icons.star,
                             size: 12,
                             color: index < rating
-                                ? const Color(0xFFFF9800)
+                                ? const Color(0xFFFFA726)
                                 : Colors.grey[300],
                           );
                         }),
@@ -1088,6 +1495,43 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               height: 1.5,
             ),
           ),
+          if (replied && reply != null && reply.isNotEmpty) ...[  
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(12),
+                border: const Border(
+                  left: BorderSide(color: Color(0xFF4CAF50), width: 3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'PHẢN HỒI CỦA CHỦ SÂN:',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2E7D32),
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    reply,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (images != null && images.isNotEmpty) ...[
             const SizedBox(height: 12),
             SizedBox(
@@ -1128,12 +1572,12 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           height: 56,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFFF9800), Color(0xFFF44336)],
+              colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF9800).withValues(alpha: 0.4),
+                color: const Color(0xFF4CAF50).withValues(alpha: 0.4),
                 offset: const Offset(0, 8),
                 blurRadius: 24,
               ),

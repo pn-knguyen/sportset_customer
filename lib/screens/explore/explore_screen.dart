@@ -1,4 +1,5 @@
-﻿import 'dart:math';
+﻿import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -23,6 +24,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
   LatLng? _userLocation;
   bool _isLocating = false;
   int _selectedIndex = -1;
+
+  // Ratings computed from reviews grouped by facilityId
+  Map<String, String> _courtFacilityMap = {}; // courtId → facilityId
+  Map<String, double> _facilityRatings = {};
+  Map<String, int> _facilityReviewCounts = {};
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _reviewDocs = [];
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _courtSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reviewSub;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -146,14 +155,61 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
+  void _subscribeCourtsAndReviews() {
+    _courtSub = FirebaseFirestore.instance
+        .collection('courts')
+        .snapshots()
+        .listen((snap) {
+      _courtFacilityMap = {
+        for (final doc in snap.docs)
+          doc.id: doc.data()['facilityId']?.toString() ?? ''
+      };
+      _recomputeFacilityRatings();
+    });
+
+    _reviewSub = FirebaseFirestore.instance
+        .collection('reviews')
+        .snapshots()
+        .listen((snap) {
+      _reviewDocs = snap.docs;
+      _recomputeFacilityRatings();
+    });
+  }
+
+  void _recomputeFacilityRatings() {
+    final buckets = <String, List<double>>{};
+    for (final doc in _reviewDocs) {
+      final data = doc.data();
+      final courtId = data['fieldId']?.toString() ?? '';
+      final facilityId = _courtFacilityMap[courtId] ?? '';
+      final r = (data['rating'] as num?)?.toDouble();
+      if (facilityId.isNotEmpty && r != null) {
+        buckets.putIfAbsent(facilityId, () => []).add(r);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _facilityRatings.clear();
+      _facilityReviewCounts.clear();
+      for (final entry in buckets.entries) {
+        _facilityReviewCounts[entry.key] = entry.value.length;
+        _facilityRatings[entry.key] =
+            entry.value.reduce((a, b) => a + b) / entry.value.length;
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _getUserLocation());
+    _subscribeCourtsAndReviews();
   }
 
   @override
   void dispose() {
+    _courtSub?.cancel();
+    _reviewSub?.cancel();
     _searchController.dispose();
     _pageController.dispose();
     _mapController?.dispose();
@@ -218,7 +274,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         markerId: MarkerId(v['id'] as String),
         position: LatLng(lat, lng),
         icon: BitmapDescriptor.defaultMarkerWithHue(
-          isSelected ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
+          isSelected ? BitmapDescriptor.hueRed : BitmapDescriptor.hueGreen,
         ),
         zIndex: isSelected ? 1 : 0,
         onTap: () => _onMarkerTap(i, LatLng(lat, lng)),
@@ -231,9 +287,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
         circleId: const CircleId('radius'),
         center: _userLocation!,
         radius: _nearbyRadiusKm * 1000,
-        strokeColor: const Color(0xFFFF9800),
+        strokeColor: const Color(0xFF4CAF50),
         strokeWidth: 1,
-        fillColor: const Color(0xFFFF9800).withValues(alpha: 0.06),
+        fillColor: const Color(0xFF4CAF50).withValues(alpha: 0.06),
       ));
     }
 
@@ -388,6 +444,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final close = v['closeTime'] as String;
     final hours =
         open.isNotEmpty && close.isNotEmpty ? '$open - $close' : 'Liên hệ';
+    final facilityId = v['id'] as String? ?? '';
+    final avgRating = _facilityRatings[facilityId];
+    final reviewCount = _facilityReviewCounts[facilityId] ?? 0;
+    final hasRating = avgRating != null && reviewCount > 0;
 
     return GestureDetector(
       onTap: () => Navigator.pushNamed(
@@ -401,12 +461,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: isSelected
-              ? Border.all(color: const Color(0xFFFF9800), width: 2)
+              ? Border.all(color: const Color(0xFF4CAF50), width: 2)
               : null,
           boxShadow: [
             BoxShadow(
               color: isSelected
-                  ? const Color(0xFFFF9800).withValues(alpha: 0.3)
+                  ? const Color(0xFF4CAF50).withValues(alpha: 0.3)
                   : Colors.black.withValues(alpha: 0.12),
               blurRadius: isSelected ? 16 : 10,
               offset: const Offset(0, 4),
@@ -474,13 +534,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     Row(
                       children: [
                         const Icon(Icons.access_time,
-                            size: 12, color: Color(0xFFFF9800)),
+                            size: 12, color: Color(0xFF4CAF50)),
                         const SizedBox(width: 3),
                         Text(
                           hours,
                           style: const TextStyle(
                               fontSize: 11,
-                              color: Color(0xFFFF9800),
+                              color: Color(0xFF4CAF50),
                               fontWeight: FontWeight.w500),
                         ),
                       ],
@@ -488,18 +548,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.star,
-                            size: 12, color: Color(0xFFFF9800)),
+                        const Icon(Icons.star_rounded,
+                            size: 12, color: Color(0xFFF59E0B)),
                         const SizedBox(width: 3),
                         Text(
-                          (v['rating'] as double? ?? 0) > 0
-                              ? (v['rating'] as double).toStringAsFixed(1)
+                          hasRating
+                              ? avgRating.toStringAsFixed(1)
                               : 'Chưa có',
                           style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF1A237E)),
                         ),
+                        if (hasRating) ...[
+                          const SizedBox(width: 3),
+                          Text(
+                            '($reviewCount)',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
                         if (distLabel.isNotEmpty) ...[
                           const SizedBox(width: 10),
                           Icon(Icons.near_me,
@@ -520,7 +590,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               padding: const EdgeInsets.only(right: 6),
               child: Icon(Icons.chevron_right,
                   color: isSelected
-                      ? const Color(0xFFFF9800)
+                      ? const Color(0xFF4CAF50)
                       : Colors.grey[400],
                   size: 22),
             ),

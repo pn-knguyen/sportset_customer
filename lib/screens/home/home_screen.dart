@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,10 +16,294 @@ class _HomeScreenState extends State<HomeScreen> {
   String _displayName = '';
   String _photoUrl = '';
 
+  // Distance
+  Position? _userPosition;
+  // facilityId -> {lat, lng}
+  final Map<String, Map<String, double>> _facilityCoords = {};
+
+  // Ratings from reviews collection: courtId -> avgRating
+  final Map<String, double> _courtRatings = {};
+  final Map<String, int> _courtReviewCounts = {};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reviewSub;
+
+  // Search
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  List<Map<String, dynamic>> _allCourts = [];
+  List<Map<String, dynamic>> _suggestions = [];
+
   @override
   void initState() {
     super.initState();
     _loadUserInfo();
+    _getUserLocation();
+    _loadFacilityCoords();
+    _loadAllCourts();
+    _subscribeReviews();
+    _searchFocus.addListener(_onFocusChange);
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _reviewSub?.cancel();
+    _removeOverlay();
+    _searchFocus.removeListener(_onFocusChange);
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _subscribeReviews() {
+    _reviewSub = FirebaseFirestore.instance
+        .collection('reviews')
+        .snapshots()
+        .listen((snapshot) {
+      final ratings = <String, List<double>>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final fieldId = data['fieldId']?.toString() ?? '';
+        final r = (data['rating'] as num?)?.toDouble();
+        if (fieldId.isNotEmpty && r != null) {
+          ratings.putIfAbsent(fieldId, () => []).add(r);
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _courtRatings.clear();
+          _courtReviewCounts.clear();
+          for (final entry in ratings.entries) {
+            _courtReviewCounts[entry.key] = entry.value.length;
+            _courtRatings[entry.key] =
+                entry.value.reduce((a, b) => a + b) / entry.value.length;
+          }
+        });
+      }
+    });
+  }
+
+  Future<void> _loadAllCourts() async {
+    try {
+      final snap =
+          await FirebaseFirestore.instance.collection('courts').get();
+      final courts = snap.docs
+          .map((doc) => _courtFromFirestore(doc.data(), docId: doc.id))
+          .where((c) {
+        final status = c['status']?.toString() ?? '';
+        return status.isEmpty || status == 'available';
+      }).toList();
+      if (mounted) setState(() => _allCourts = courts);
+    } catch (_) {}
+  }
+
+  void _onFocusChange() {
+    if (!_searchFocus.hasFocus) {
+      _removeOverlay();
+    }
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      _removeOverlay();
+      setState(() => _suggestions = []);
+      return;
+    }
+    final results = _allCourts.where((c) {
+      final name = (c['name'] ?? '').toString().toLowerCase();
+      final address = (c['address'] ?? '').toString().toLowerCase();
+      final category = (c['category'] ?? '').toString().toLowerCase();
+      return name.contains(query) ||
+          address.contains(query) ||
+          category.contains(query);
+    }).take(6).toList();
+    setState(() => _suggestions = results);
+    if (results.isEmpty) {
+      _removeOverlay();
+    } else {
+      _showOverlay();
+    }
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    final overlay = Overlay.of(context);
+    _overlayEntry = OverlayEntry(
+      builder: (ctx) => Positioned(
+        width: MediaQuery.of(context).size.width - 32,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 60),
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 300),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFC8E6C9)),
+              ),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: _suggestions.length,
+                separatorBuilder: (a, b) =>
+                    const Divider(height: 1, color: Color(0xFFF1F8E9)),
+                itemBuilder: (ctx, i) {
+                  final court = _suggestions[i];
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      _removeOverlay();
+                      _searchController.clear();
+                      _searchFocus.unfocus();
+                      Navigator.pushNamed(
+                        context,
+                        '/field-detail',
+                        arguments: {
+                          'court': court['detailData'] ?? court
+                        },
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              court['image']?.toString() ?? '',
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx2, err, st) => Container(
+                                width: 44,
+                                height: 44,
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.sports,
+                                    size: 20, color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  court['name']?.toString() ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1A237E),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  court['address']?.toString() ?? '',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[500],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            court['price']?.toString() ?? '',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF4CAF50),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  Future<void> _getUserLocation() async {
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.low),
+      );
+      if (mounted) setState(() => _userPosition = pos);
+    } catch (_) {}
+  }
+
+  Future<void> _loadFacilityCoords() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('facilities')
+          .get();
+      final coords = <String, Map<String, double>>{};
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final lat = (data['latitude'] as num?)?.toDouble();
+        final lng = (data['longitude'] as num?)?.toDouble();
+        if (lat != null && lng != null) {
+          coords[doc.id] = {'lat': lat, 'lng': lng};
+        }
+      }
+      if (mounted) setState(() => _facilityCoords.addAll(coords));
+    } catch (_) {}
+  }
+
+  String _calcDistanceLabel(String? facilityId) {
+    if (_userPosition == null || facilityId == null) return '';
+    final coords = _facilityCoords[facilityId];
+    if (coords == null) return '';
+    final lat2 = coords['lat']!;
+    final lng2 = coords['lng']!;
+    const r = 6371.0;
+    final dLat = (lat2 - _userPosition!.latitude) * pi / 180;
+    final dLng = (lng2 - _userPosition!.longitude) * pi / 180;
+    final sinDLat = sin(dLat / 2);
+    final sinDLng = sin(dLng / 2);
+    final c = 2 *
+        asin(sqrt(sinDLat * sinDLat +
+            cos(_userPosition!.latitude * pi / 180) *
+                cos(lat2 * pi / 180) *
+                sinDLng *
+                sinDLng));
+    final km = r * c;
+    return km < 1
+        ? '${(km * 1000).round()} m'
+        : '${km.toStringAsFixed(1)} km';
   }
 
   Future<void> _loadUserInfo() async {
@@ -79,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'name': data['name'] ?? 'Chưa có tên sân',
       'address': data['address'] ?? 'Chưa cập nhật địa chỉ',
       'rating': _toDouble(data['rating'], fallback: 0),
-      'distance': data['distance']?.toString() ?? '-- km',
+      'facilityId': data['facilityId']?.toString() ?? '',
       'price': _toPrice(data['pricePerHour'] ?? data['price']),
       'image':
           data['imageUrl'] ??
@@ -145,8 +432,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE8F5E9), Colors.white],
+          ),
+        ),
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('sports')
             .where('isVisible', isEqualTo: true)
@@ -233,13 +528,14 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      color: const Color(0xFFFFF8F6),
+      color: Colors.transparent,
       child: SafeArea(
         bottom: false,
         child: Row(
@@ -252,7 +548,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 36,
                   child: ShaderMask(
                     shaderCallback: (bounds) => const LinearGradient(
-                      colors: [Color(0xFFFF9800), Color(0xFFF44336)],
+                      colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
                     ).createShader(bounds),
                     child: const Icon(
                       Icons.sports_soccer,
@@ -265,7 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Text(
                   'SPORTSET',
                   style: TextStyle(
-                    color: Color(0xFF0F172A),
+                    color: Color(0xFF2E7D32),
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 2.2,
@@ -273,29 +569,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _getGreeting(),
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+            Flexible(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _getGreeting(),
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          _displayName.isEmpty ? 'Bạn' : _displayName,
+                          style: const TextStyle(
+                            color: Color(0xFF1c170d),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    Text(
-                      _displayName.isEmpty ? 'Bạn' : _displayName,
-                      style: const TextStyle(
-                        color: Color(0xFF1c170d),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
                 const SizedBox(width: 12),
                 Container(
                   width: 36,
@@ -303,7 +607,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: const Color(0xFFFF9800),
+                      color: const Color(0xFF4CAF50),
                       width: 2,
                     ),
                     boxShadow: [
@@ -328,7 +632,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                           )
                         : Container(
-                            color: const Color(0xFFFF9800),
+                            color: const Color(0xFF4CAF50),
                             child: Center(
                               child: Text(
                                 _displayName.isNotEmpty
@@ -346,6 +650,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
+          ),
           ],
         ),
       ),
@@ -355,42 +660,68 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade50),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.search, color: Colors.grey.shade400, size: 20),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Tìm kiếm sân tập, địa điểm...',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+      child: CompositedTransformTarget(
+        link: _layerLink,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade50),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocus,
+                  decoration: const InputDecoration(
+                    hintText: 'Tìm kiếm sân tập, địa điểm...',
+                    hintStyle: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  style: const TextStyle(fontSize: 14),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) {
+                    _removeOverlay();
+                    _searchFocus.unfocus();
+                  },
                 ),
               ),
-            ),
-            Container(
-              width: 1,
-              height: 20,
-              color: Colors.grey.shade200,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-            ),
-            const Icon(Icons.tune, color: Color(0xFFFF9800), size: 20),
-          ],
+              if (_searchController.text.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    _searchController.clear();
+                    _removeOverlay();
+                  },
+                  child: Icon(Icons.close,
+                      color: Colors.grey.shade400, size: 18),
+                )
+              else ...[  Container(
+                  width: 1,
+                  height: 20,
+                  color: Colors.grey.shade200,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+                const Icon(Icons.tune, color: Color(0xFF4CAF50), size: 20),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -400,12 +731,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       child: Container(
-        height: 180,
+        height: 210,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.orange.withValues(alpha: 0.15),
+              color: Colors.green.withValues(alpha: 0.15),
               blurRadius: 12,
             ),
           ],
@@ -438,11 +769,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'ƯU ĐÃI MỚI',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     const Text(
                       'Khám phá ngay',
                       style: TextStyle(
@@ -466,8 +814,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ElevatedButton(
                       onPressed: () {},
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF9800),
-                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF4CAF50),
                         elevation: 4,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -518,7 +866,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text(
                     'Xem tất cả',
                     style: TextStyle(
-                      color: Color(0xFFFF9800),
+                      color: Color(0xFF4CAF50),
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -526,7 +874,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 4),
                   const Icon(
                     Icons.chevron_right,
-                    color: Color(0xFFFF9800),
+                    color: Color(0xFF4CAF50),
                     size: 14,
                   ),
                 ],
@@ -600,40 +948,56 @@ class _HomeScreenState extends State<HomeScreen> {
                 Positioned(
                   top: 8,
                   left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.star,
-                          color: Color(0xFFFF9800),
-                          size: 10,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          field['rating'].toString(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                  child: Builder(builder: (context) {
+                    final courtId = field['id']?.toString() ?? '';
+                    final avg = _courtRatings[courtId];
+                    final count = _courtReviewCounts[courtId] ?? 0;
+                    final hasRating = avg != null && count > 0;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 4,
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFF59E0B),
+                            size: 12,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            hasRating
+                                ? avg.toStringAsFixed(1)
+                                : '—',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A1C1C),
+                            ),
+                          ),
+                          if (hasRating) ...[  const SizedBox(width: 3),
+                            Text(
+                              '($count)',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }),
                 ),
               ],
             ),
@@ -688,19 +1052,43 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: Colors.grey,
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            field['distance'],
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey,
-                            ),
-                          ),
+                          Builder(builder: (context) {
+                            final label = _calcDistanceLabel(
+                                field['facilityId'] as String?);
+                            if (label.isEmpty) {
+                              return _userPosition == null &&
+                                      (field['facilityId'] as String? ?? '')
+                                          .isNotEmpty
+                                  ? const SizedBox(
+                                      width: 10,
+                                      height: 10,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                        color: Colors.grey,
+                                      ),
+                                    )
+                                  : const Text(
+                                      '--',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                            }
+                            return Text(
+                              label,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            );
+                          }),
                         ],
                       ),
                       Text(
                         field['price'],
                         style: const TextStyle(
-                          color: Color(0xFFFF9800),
+                          color: Color(0xFF4CAF50),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),

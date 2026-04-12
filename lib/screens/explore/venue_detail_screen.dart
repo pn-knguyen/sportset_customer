@@ -48,7 +48,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       case 'available':
         return Colors.green;
       case 'maintenance':
-        return Colors.orange;
+        return Colors.green;
       case 'closed':
         return Colors.red;
       default:
@@ -141,7 +141,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     final venueId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
+      backgroundColor: const Color(0xFFE8F5E9),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('facilities')
@@ -306,7 +306,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       margin: const EdgeInsets.only(top: 0),
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
       decoration: const BoxDecoration(
-        color: Color(0xFFFFF8F6),
+        color: Color(0xFFE8F5E9),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -331,18 +331,18 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF9800).withValues(alpha: 0.12),
+                    color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.star, color: Color(0xFFFF9800), size: 14),
+                      const Icon(Icons.star, color: Color(0xFF4CAF50), size: 14),
                       const SizedBox(width: 4),
                       Text(
                         rating.toStringAsFixed(1),
                         style: const TextStyle(
-                          color: Color(0xFFFF9800),
+                          color: Color(0xFF4CAF50),
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -424,7 +424,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFFE0B2)),
+                    border: Border.all(color: const Color(0xFFC8E6C9)),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.02),
@@ -438,7 +438,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     children: [
                       Icon(
                         amenity['icon'] as IconData,
-                        color: const Color(0xFFFF9800),
+                        color: const Color(0xFF4CAF50),
                         size: 16,
                       ),
                       const SizedBox(width: 6),
@@ -457,7 +457,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
             ),
           ],
           const SizedBox(height: 20),
-          const Divider(color: Color(0xFFFFE0B2)),
+          const Divider(color: Color(0xFFC8E6C9)),
         ],
       ),
     );
@@ -637,13 +637,13 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF9800).withValues(alpha: 0.12),
+                            color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             price,
                             style: const TextStyle(
-                              color: Color(0xFFFF9800),
+                              color: Color(0xFF4CAF50),
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
@@ -674,13 +674,13 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       Row(
                         children: [
                           const Icon(Icons.star,
-                              size: 12, color: Color(0xFFFF9800)),
+                              size: 12, color: Color(0xFF4CAF50)),
                           const SizedBox(width: 3),
                           Text(
                             rating.toStringAsFixed(1),
                             style: const TextStyle(
                               fontSize: 12,
-                              color: Color(0xFFFF9800),
+                              color: Color(0xFF4CAF50),
                               fontWeight: FontWeight.w600,
                             ),
                           ),

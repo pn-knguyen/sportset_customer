@@ -118,10 +118,6 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     return _court['name']?.toString() ?? 'Sân thể thao';
   }
 
-  String _sportType() {
-    return _court['sportType']?.toString() ?? '';
-  }
-
   String _timeLabel() {
     final slot = _selectedSlot;
     if (slot == null) {
@@ -161,39 +157,36 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     return '${_bookingCode()}|${_courtName()}|${_timeLabel()}|${_dateLabel()}';
   }
 
-  IconData _sportIcon() {
-    final sportType = _sportType().toLowerCase();
-    if (sportType.contains('cầu lông')) {
-      return Icons.sports_tennis;
-    }
-    if (sportType.contains('bóng rổ')) {
-      return Icons.sports_basketball;
-    }
-    return Icons.sports_soccer;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildSuccessIcon(),
-                    _buildQRCodeSection(),
-                    _buildBookingDetails(),
-                    _buildActionButtons(context),
-                  ],
-                ),
-              ),
+      backgroundColor: const Color(0xFFF0FDF4),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFF0FDF4), Color(0xFFF9F9F9)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 10),
+                _buildSuccessIcon(),
+                const SizedBox(height: 8),
+                Expanded(child: _buildQRCodeSection()),
+                const SizedBox(height: 8),
+                _buildBookingDetails(),
+                const SizedBox(height: 8),
+                _buildActionButtons(context),
+                const SizedBox(height: 10),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -203,37 +196,46 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     return Column(
       children: [
         Container(
-          width: 60,
-          height: 60,
+          width: 68,
+          height: 68,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFFF9800), Color(0xFFF44336)],
+              colors: [Color(0xFF4CAF50), Color(0xFF006E1C)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(30),
+            shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF9800).withValues(alpha: 0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 4),
+                color: const Color(0xFF006E1C).withValues(alpha: 0.2),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: const Icon(
             Icons.check,
-            size: 36,
+            size: 38,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         const Text(
           'THÀNH CÔNG!',
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFFFF9800),
-            letterSpacing: 1.5,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF006E1C),
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        const Text(
+          'Cảm ơn bạn đã tin dùng dịch vụ',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF3F4A3C),
           ),
         ),
       ],
@@ -241,54 +243,121 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   }
 
   Widget _buildQRCodeSection() {
+    final imageUrl = _court['imageUrl']?.toString() ?? _court['image']?.toString() ?? '';
     return Container(
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-            blurRadius: 20,
+            color: const Color(0xFF006E1C).withValues(alpha: 0.06),
+            blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-                width: 1,
-              ),
-            ),
-            child: QrImageView(
-              data: _qrData(),
-              version: QrVersions.auto,
-              size: 150,
-              backgroundColor: Colors.white,
-              eyeStyle: const QrEyeStyle(
-                eyeShape: QrEyeShape.square,
-                color: Color(0xFF1c170d),
-              ),
-              dataModuleStyle: const QrDataModuleStyle(
-                dataModuleShape: QrDataModuleShape.square,
-                color: Color(0xFF1c170d),
-              ),
+          SizedBox(
+            height: 80,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                imageUrl.isNotEmpty
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFFC8E6C9),
+                          child: const Icon(
+                            Icons.sports_soccer,
+                            color: Color(0xFF4CAF50),
+                            size: 48,
+                          ),
+                        ),
+                      )
+                    : Container(
+                        color: const Color(0xFFC8E6C9),
+                        child: const Icon(
+                          Icons.sports_soccer,
+                          color: Color(0xFF4CAF50),
+                          size: 48,
+                        ),
+                      ),
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.transparent, Color(0x99000000)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 12,
+                  left: 16,
+                  child: Text(
+                    _courtName(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Vui lòng đưa mã QR này cho nhân viên quản lý sân.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey,
-              height: 1.4,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(
+                      color: const Color(0xFFBECAB9),
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Stack(
+                    children: [
+                      QrImageView(
+                        data: _qrData(),
+                        version: QrVersions.auto,
+                        size: 110,
+                        backgroundColor: Colors.white,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: Color(0xFF1A1C1C),
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: Color(0xFF1A1C1C),
+                        ),
+                      ),
+                      Positioned(top: 0, left: 0, child: _buildCorner(top: true, left: true)),
+                      Positioned(top: 0, right: 0, child: _buildCorner(top: true, left: false)),
+                      Positioned(bottom: 0, left: 0, child: _buildCorner(top: false, left: true)),
+                      Positioned(bottom: 0, right: 0, child: _buildCorner(top: false, left: false)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Vui lòng đưa mã QR này cho nhân viên quản lý sân để nhận sân.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF3F4A3C),
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -296,202 +365,162 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     );
   }
 
+  Widget _buildCorner({required bool top, required bool left}) {
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        border: Border(
+          top: top ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
+          bottom: !top ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
+          left: left ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
+          right: !left ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
+        ),
+      ),
+    );
+  }
+
   Widget _buildBookingDetails() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.only(bottom: 10),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Color(0xFFFFF3E0),
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'MÃ ĐƠN HÀNG',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                Text(
-                  _bookingCode(),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFFF9800),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                _sportIcon(),
-                color: const Color(0xFFFF9800),
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Tên sân',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _courtName(),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1c170d),
-                      ),
-                    ),
-                    if ((_selectedSubCourt ?? '').trim().isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        _selectedSubCourt!,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF6B7280),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.schedule,
-                      color: Color(0xFFFF9800),
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Thời gian',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _timeLabel(),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1c170d),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      color: Color(0xFFFF9800),
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Ngày',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _dateLabel(),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1c170d),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.only(top: 10),
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(color: Color(0xFFFFF3E0), width: 1),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Thanh toán ($_paymentMethodLabel)',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
-                ),
-                Text(
-                  _formatCurrency(_totalPrice),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFFF9800),
-                  ),
-                ),
-              ],
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF006E1C).withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'THÔNG TIN ĐƠN HÀNG',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6F7A6B),
+                  letterSpacing: 0.8,
+                ),
+              ),
+              Text(
+                _bookingCode(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4CAF50),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Divider(color: Color(0xFFF3F3F3), height: 1),
+          const SizedBox(height: 10),
+          _buildDetailRow(
+            icon: Icons.stadium,
+            label: 'TÊN SÂN',
+            value: _courtName(),
+            subtitle: (_selectedSubCourt ?? '').trim().isNotEmpty ? _selectedSubCourt : null,
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow(
+            icon: Icons.schedule,
+            label: 'THỜI GIAN',
+            value: _timeLabel(),
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow(
+            icon: Icons.calendar_today,
+            label: 'NGÀY',
+            value: _dateLabel(),
+          ),
+          const SizedBox(height: 10),
+          const Divider(color: Color(0xFFF3F3F3), height: 1),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Thanh toán ($_paymentMethodLabel)',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF6F7A6B),
+                ),
+              ),
+              Text(
+                _formatCurrency(_totalPrice),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF006E1C),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    String? subtitle,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(icon, color: const Color(0xFF4CAF50), size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6F7A6B),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1C1C),
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6F7A6B),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -500,19 +529,19 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       children: [
         Container(
           width: double.infinity,
-          height: 48,
+          height: 46,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
             ),
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF9800).withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -522,11 +551,12 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
               onTap: () {
                 Navigator.pushNamedAndRemoveUntil(
                   context,
-                  '/booking-history',
+                  '/main',
                   (route) => false,
+                  arguments: {'initialIndex': 3},
                 );
               },
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(14),
               child: const Center(
                 child: Text(
                   'Xem lịch đặt của tôi',
@@ -540,15 +570,14 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          height: 48,
+          height: 46,
           decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color(0xFFFF9800).withValues(alpha: 0.3),
+              color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
               width: 2,
             ),
           ),
@@ -562,14 +591,14 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
                   (route) => false,
                 );
               },
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(14),
               child: const Center(
                 child: Text(
                   'Về trang chủ',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFFFF9800),
+                    color: Color(0xFF4CAF50),
                   ),
                 ),
               ),

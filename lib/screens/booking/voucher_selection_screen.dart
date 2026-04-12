@@ -1,6 +1,5 @@
-import 'dart:ui';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class VoucherSelectionScreen extends StatefulWidget {
@@ -17,6 +16,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
   String? _selectedVoucherId;
   String? _facilityId;
   int _orderValue = 0;
+  Set<String> _usedVoucherIds = {};
 
   final List<String> _filters = const ['Có thể dùng', 'Sắp hết hạn', 'Tất cả'];
 
@@ -37,6 +37,30 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
     _facilityId = args['facilityId']?.toString();
     _orderValue = _toInt(args['orderValue']);
     _selectedVoucherId = args['selectedVoucherId']?.toString();
+    _loadUsedVoucherIds();
+  }
+
+  Future<void> _loadUsedVoucherIds() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+      final usedIds = <String>{};
+      for (final doc in snapshot.docs) {
+        final voucherId = doc.data()['voucherId']?.toString() ?? '';
+        if (voucherId.isNotEmpty) {
+          usedIds.add(voucherId);
+        }
+      }
+      if (mounted) {
+        setState(() => _usedVoucherIds = usedIds);
+      }
+    } catch (_) {
+      // silently ignore — user simply won't have usage data loaded
+    }
   }
 
   @override
@@ -85,6 +109,14 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
     return totalQuantity;
   }
 
+  bool _hasUserUsedVoucher(Map<String, dynamic> voucher) {
+    final voucherId = voucher['id']?.toString() ?? '';
+    if (voucherId.isEmpty) return false;
+    final maxPerUser = _toInt(voucher['maxPerUser'], fallback: 1);
+    if (maxPerUser <= 0) return false;
+    return _usedVoucherIds.contains(voucherId);
+  }
+
   bool _canApplyVoucher(Map<String, dynamic> voucher, DateTime now) {
     final isActive = voucher['isActive'] == true;
     if (!isActive) {
@@ -101,6 +133,10 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
 
     final minOrderValue = _toInt(voucher['minOrderValue']);
     if (_orderValue < minOrderValue) {
+      return false;
+    }
+
+    if (_hasUserUsedVoucher(voucher)) {
       return false;
     }
 
@@ -281,7 +317,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
+      backgroundColor: const Color(0xFFF0FDF4),
       body: Stack(
         children: [
           Column(
@@ -370,63 +406,52 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
       top: 0,
       left: 0,
       right: 0,
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 48,
-              bottom: 16,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF8F6).withValues(alpha: 0.8),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+      child: Container(
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 48,
+          bottom: 16,
+        ),
+        color: Colors.transparent,
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.chevron_left,
-                      color: Color(0xFF1c170d),
-                    ),
-                    padding: EdgeInsets.zero,
-                    onPressed: () => Navigator.pop(context),
-                  ),
+                ],
+              ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back,
+                  color: Color(0xFF1A1C1C),
                 ),
-                const Expanded(
-                  child: Text(
-                    'Chọn Voucher',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1c170d),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 40),
-              ],
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.pop(context),
+              ),
             ),
-          ),
+            const Expanded(
+              child: Text(
+                'Chọn Voucher',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1C1C),
+                ),
+              ),
+            ),
+            const SizedBox(width: 40),
+          ],
         ),
       ),
     );
@@ -434,17 +459,13 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
 
   Widget _buildVoucherCodeInput(List<Map<String, dynamic>> vouchers) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-          width: 1,
-        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -455,11 +476,16 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
           Expanded(
             child: TextField(
               controller: _voucherCodeController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Nhập mã giảm giá...',
-                hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
+                hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF6F7A6B)),
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                prefixIcon: const Icon(
+                  Icons.confirmation_number_outlined,
+                  color: Color(0xFF6F7A6B),
+                  size: 20,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
               onChanged: (_) => setState(() {}),
             ),
@@ -467,13 +493,13 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
               onTap: () => _applyCodeFromInput(vouchers),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF9800),
-                  borderRadius: BorderRadius.circular(20),
+                  color: const Color(0xFF4CAF50),
+                  borderRadius: BorderRadius.circular(22),
                 ),
                 child: const Text(
                   'Áp dụng',
@@ -507,21 +533,15 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFFFF9800) : Colors.white,
+                color: isSelected ? const Color(0xFF4CAF50) : const Color(0xFFE8E8E8),
                 borderRadius: BorderRadius.circular(20),
-                border: isSelected
-                    ? null
-                    : Border.all(
-                        color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-                        width: 1,
-                      ),
               ),
               child: Text(
                 _filters[index],
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? Colors.white : Colors.grey[600],
+                  color: isSelected ? Colors.white : const Color(0xFF3F4A3C),
                 ),
               ),
             ),
@@ -539,12 +559,12 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFE0CC)),
+          border: Border.all(color: const Color(0xFFC8E6C9)),
         ),
         child: const Text(
           'Không có voucher phù hợp.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Color(0xFF6B7280)),
+          style: TextStyle(color: Color(0xFF6F7A6B)),
         ),
       );
     }
@@ -564,10 +584,24 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
   Widget _buildVoucherCard(Map<String, dynamic> voucher) {
     final now = DateTime.now();
     final isSelected = voucher['id']?.toString() == _selectedVoucherId;
+    final alreadyUsed = _hasUserUsedVoucher(voucher);
     final canApply = _canApplyVoucher(voucher, now);
     final endDate = _toDateTime(voucher['endDate']);
     final minOrder = _toInt(voucher['minOrderValue']);
     final discountAmount = _computeDiscountAmount(voucher, _orderValue);
+
+    final String statusText;
+    final Color statusColor;
+    if (alreadyUsed) {
+      statusText = 'Bạn đã sử dụng voucher này';
+      statusColor = const Color(0xFF6F7A6B);
+    } else if (canApply) {
+      statusText = 'Tiết kiệm ${_formatCurrency(discountAmount)}';
+      statusColor = const Color(0xFF4CAF50);
+    } else {
+      statusText = 'Chưa đủ điều kiện áp dụng';
+      statusColor = const Color(0xFFBA1A1A);
+    }
 
     return GestureDetector(
       onTap: canApply
@@ -586,14 +620,14 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFFFF9800)
-                  : const Color(0xFFFF9800).withValues(alpha: 0.1),
+                  ? const Color(0xFF4CAF50).withValues(alpha: 0.4)
+                  : const Color(0xFFBECAB9).withValues(alpha: 0.4),
               width: isSelected ? 2 : 1,
             ),
             boxShadow: [
               BoxShadow(
                 color: isSelected
-                    ? const Color(0xFFFF9800).withValues(alpha: 0.15)
+                    ? const Color(0xFF4CAF50).withValues(alpha: 0.12)
                     : Colors.black.withValues(alpha: 0.03),
                 blurRadius: isSelected ? 12 : 6,
                 offset: const Offset(0, 2),
@@ -611,7 +645,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                         width: 100,
                         decoration: BoxDecoration(
                           color: canApply
-                              ? const Color(0xFFFF9800).withValues(alpha: 0.1)
+                              ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
                               : Colors.grey[100],
                         ),
                         child: Column(
@@ -620,7 +654,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                             Icon(
                               Icons.confirmation_number,
                               color: canApply
-                                  ? const Color(0xFFFF9800)
+                                  ? const Color(0xFF4CAF50)
                                   : Colors.grey[400],
                               size: 32,
                             ),
@@ -631,7 +665,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                                 color: canApply
-                                    ? const Color(0xFFFF9800)
+                                    ? const Color(0xFF4CAF50)
                                     : Colors.grey[400],
                                 letterSpacing: 1.2,
                               ),
@@ -655,7 +689,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1c170d),
+                                  color: Color(0xFF1A1C1C),
                                   height: 1.2,
                                 ),
                               ),
@@ -673,21 +707,17 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: canApply
-                                      ? const Color(0xFFFF9800)
+                                      ? const Color(0xFF4CAF50)
                                       : Colors.grey[500],
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                canApply
-                                    ? 'Tiết kiệm ${_formatCurrency(discountAmount)}'
-                                    : 'Chưa đủ điều kiện áp dụng',
+                                statusText,
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: canApply
-                                      ? const Color(0xFF10B981)
-                                      : const Color(0xFFEF4444),
+                                  color: statusColor,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -697,7 +727,28 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                       ),
                     ],
                   ),
-                  if (isSelected)
+                  if (alreadyUsed)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6F7A6B),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'Đã sử dụng',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (isSelected)
                     Positioned(
                       top: 12,
                       right: 12,
@@ -705,7 +756,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                         width: 24,
                         height: 24,
                         decoration: const BoxDecoration(
-                          color: Color(0xFFFF9800),
+                          color: Color(0xFF4CAF50),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -729,59 +780,92 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
       padding: const EdgeInsets.only(
         left: 24,
         right: 24,
-        top: 24,
+        top: 16,
         bottom: 32,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8F6),
-        border: Border(
-          top: BorderSide(
-            color: Colors.grey.withValues(alpha: 0.1),
-            width: 1,
-          ),
-        ),
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 15,
-            offset: const Offset(0, -4),
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, -8),
           ),
         ],
       ),
-      child: Container(
-        height: 56,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF9800), Color(0xFFF44336)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF9800).withValues(alpha: 0.3),
-              blurRadius: 25,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _confirmSelection(vouchers),
-            borderRadius: BorderRadius.circular(28),
-            child: const Center(
-              child: Text(
-                'Xác nhận',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+      child: Row(
+        children: [
+          // Cancel
+          Expanded(
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context, null),
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F3F3),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.close, color: Color(0xFF6F7A6B), size: 20),
+                    SizedBox(height: 2),
+                    Text(
+                      'Hủy',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6F7A6B),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        ),
+          const SizedBox(width: 12),
+          // Confirm
+          Expanded(
+            flex: 2,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _confirmSelection(vouchers),
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.white, size: 20),
+                      SizedBox(height: 2),
+                      Text(
+                        'Xác nhận',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -791,7 +875,7 @@ class DashedLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey[300]!
+      ..color = const Color(0xFFBECAB9)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 

@@ -51,7 +51,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F6),
+      backgroundColor: const Color(0xFFE8F5E9),
       body: Column(
         children: [
           _buildHeader(),
@@ -91,7 +91,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildHeader() {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFFFFF8F6),
+        color: Color(0xFFE8F5E9),
       ),
       child: SafeArea(
         bottom: false,
@@ -128,7 +128,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildTabs() {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFFFFF8F6),
+        color: Color(0xFFE8F5E9),
       ),
       child: Row(
         children: [
@@ -146,7 +146,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
-                        color: _selectedTab == 0 ? const Color(0xFFFF9800) : Colors.transparent,
+                        color: _selectedTab == 0 ? const Color(0xFF4CAF50) : Colors.transparent,
                         width: 3,
                       ),
                     ),
@@ -178,7 +178,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
-                        color: _selectedTab == 1 ? const Color(0xFFFF9800) : Colors.transparent,
+                        color: _selectedTab == 1 ? const Color(0xFF4CAF50) : Colors.transparent,
                         width: 3,
                       ),
                     ),
