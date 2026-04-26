@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_secrets.dart';
 
 class MoMoService {
   static const String _partnerCode = 'MOMO';
-  static const String _accessKey = String.fromEnvironment('MOMO_ACCESS_KEY');
-  static const String _secretKey = String.fromEnvironment('MOMO_SECRET_KEY');
+  static const String _accessKey = AppSecrets.momoAccessKey;
+  static const String _secretKey = AppSecrets.momoSecretKey;
   static const String _redirectUrl = 'yourapp://payment-result';
   static const String _ipnUrl = 'https://test-payment.momo.vn/notify';
   static const String _endpoint =
