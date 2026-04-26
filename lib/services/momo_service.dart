@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 
 class MoMoService {
   static const String _partnerCode = 'MOMO';
-  static const String _accessKey = '***MOMO_ACCESS_KEY_REMOVED***';
-  static const String _secretKey = '***MOMO_SECRET_REMOVED***';
+  static const String _accessKey = String.fromEnvironment('MOMO_ACCESS_KEY');
+  static const String _secretKey = String.fromEnvironment('MOMO_SECRET_KEY');
   static const String _redirectUrl = 'yourapp://payment-result';
   static const String _ipnUrl = 'https://test-payment.momo.vn/notify';
   static const String _endpoint =

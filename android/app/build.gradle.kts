@@ -40,6 +40,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY", "")
+        resValue("string", "facebook_client_token", localProperties.getProperty("FB_CLIENT_TOKEN", ""))
     }
 
     buildTypes {
