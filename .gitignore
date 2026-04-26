@@ -46,7 +46,6 @@ app.*.map.json
 
 # Local configuration — contains API keys, never commit
 android/local.properties
-.env
 lib/config/app_secrets.dart
 
 # Firebase config — regenerate with: flutterfire configure
