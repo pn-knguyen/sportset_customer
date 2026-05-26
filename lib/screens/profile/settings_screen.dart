@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -32,8 +32,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back,
-                          color: Color(0xFF4CAF50)),
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: Color(0xFF4CAF50),
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     const Expanded(
@@ -117,8 +119,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               ),
                               SizedBox(width: 4),
-                              Icon(Icons.expand_more_rounded,
-                                  size: 18, color: Color(0xFF4CAF50)),
+                              Icon(
+                                Icons.expand_more_rounded,
+                                size: 18,
+                                color: Color(0xFF4CAF50),
+                              ),
                             ],
                           ),
                         ),
@@ -129,8 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildNavRow(
                           icon: Icons.description_outlined,
                           title: 'Điều khoản sử dụng',
-                          onTap: () =>
-                              Navigator.pushNamed(context, '/terms'),
+                          onTap: () => Navigator.pushNamed(context, '/terms'),
                           showDivider: true,
                           trailingIcon: Icons.open_in_new_rounded,
                         ),
@@ -213,9 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       decoration: showDivider
           ? const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFF3F3F3)),
-              ),
+              border: Border(bottom: BorderSide(color: Color(0xFFF3F3F3))),
             )
           : null,
       child: Padding(
@@ -258,9 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Container(
           decoration: showDivider
               ? const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Color(0xFFF3F3F3)),
-                  ),
+                  border: Border(bottom: BorderSide(color: Color(0xFFF3F3F3))),
                 )
               : null,
           child: Padding(
@@ -280,8 +280,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 trailing ??
-                    Icon(trailingIcon,
-                        color: const Color(0xFFBECAB9), size: 20),
+                    Icon(
+                      trailingIcon,
+                      color: const Color(0xFFBECAB9),
+                      size: 20,
+                    ),
               ],
             ),
           ),
@@ -317,8 +320,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: AnimatedAlign(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          alignment:
-              value ? Alignment.centerRight : Alignment.centerLeft,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
             width: 16,
             height: 16,

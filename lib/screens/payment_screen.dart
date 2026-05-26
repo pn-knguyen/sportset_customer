@@ -64,8 +64,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back,
-                          color: Color(0xFF006E1C)),
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: Color(0xFF006E1C),
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     const Expanded(
@@ -136,12 +138,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
-                            vertical: 20, horizontal: 24),
+                          vertical: 20,
+                          horizontal: 24,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          border:
-                              Border.all(color: const Color(0xFFF3F3F3)),
+                          border: Border.all(color: const Color(0xFFF3F3F3)),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.04),
@@ -183,13 +186,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             color: const Color(0xFFFFEDED),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: const Color(0xFFBA1A1A)
-                                    .withValues(alpha: 0.3)),
+                              color: const Color(
+                                0xFFBA1A1A,
+                              ).withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.error_outline,
-                                  color: Color(0xFFBA1A1A), size: 18),
+                              const Icon(
+                                Icons.error_outline,
+                                color: Color(0xFFBA1A1A),
+                                size: 18,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -213,8 +221,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4CAF50),
                             foregroundColor: Colors.white,
-                            disabledBackgroundColor:
-                                const Color(0xFFBECAB9),
+                            disabledBackgroundColor: const Color(0xFFBECAB9),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),

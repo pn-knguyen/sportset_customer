@@ -39,10 +39,10 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
           .collection('bookings')
           .doc(widget.orderId)
           .update({
-        'status': 'confirmed',
-        'paymentStatus': 'paid',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'status': 'confirmed',
+            'paymentStatus': 'paid',
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
     } catch (e) {
       if (mounted) setState(() => _updateError = e.toString());
     } finally {
@@ -60,8 +60,10 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
             children: [
               CircularProgressIndicator(color: Color(0xFF4CAF50)),
               SizedBox(height: 16),
-              Text('Đang xác nhận thanh toán...',
-                  style: TextStyle(color: Color(0xFF6F7A6B))),
+              Text(
+                'Đang xác nhận thanh toán...',
+                style: TextStyle(color: Color(0xFF6F7A6B)),
+              ),
             ],
           ),
         ),
@@ -106,9 +108,7 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
 
                 // Title
                 Text(
-                  _isSuccess
-                      ? 'Thanh toán thành công!'
-                      : 'Thanh toán thất bại',
+                  _isSuccess ? 'Thanh toán thành công!' : 'Thanh toán thất bại',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 22,
@@ -124,11 +124,11 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                 Text(
                   _isSuccess
                       ? (_updateError != null
-                          ? 'Giao dịch thành công nhưng không thể cập nhật đơn hàng. Vui lòng liên hệ hỗ trợ.'
-                          : 'Đơn hàng của bạn đã được xác nhận và đang được xử lý.')
+                            ? 'Giao dịch thành công nhưng không thể cập nhật đơn hàng. Vui lòng liên hệ hỗ trợ.'
+                            : 'Đơn hàng của bạn đã được xác nhận và đang được xử lý.')
                       : (widget.message.isNotEmpty
-                          ? widget.message
-                          : 'Giao dịch không thể hoàn tất. Vui lòng thử lại.'),
+                            ? widget.message
+                            : 'Giao dịch không thể hoàn tất. Vui lòng thử lại.'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 14,
@@ -143,7 +143,9 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                        vertical: 16, horizontal: 20),
+                      vertical: 16,
+                      horizontal: 20,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(14),
@@ -158,8 +160,11 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.receipt_long_rounded,
-                            size: 18, color: Color(0xFF6F7A6B)),
+                        const Icon(
+                          Icons.receipt_long_rounded,
+                          size: 18,
+                          color: Color(0xFF6F7A6B),
+                        ),
                         const SizedBox(width: 10),
                         const Text(
                           'Mã đơn hàng:',
@@ -191,8 +196,9 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                   height: 52,
                   child: ElevatedButton(
                     onPressed: () {
-                      Navigator.of(context)
-                          .pushNamedAndRemoveUntil('/main', (_) => false);
+                      Navigator.of(
+                        context,
+                      ).pushNamedAndRemoveUntil('/main', (_) => false);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4CAF50),
@@ -225,8 +231,11 @@ class _PaymentResultScreenState extends State<PaymentResultScreen> {
                           arguments: {'initialIndex': 3},
                         );
                       },
-                      icon: const Icon(Icons.calendar_today,
-                          size: 18, color: Color(0xFF006E1C)),
+                      icon: const Icon(
+                        Icons.calendar_today,
+                        size: 18,
+                        color: Color(0xFF006E1C),
+                      ),
                       label: const Text(
                         'Xem lịch đặt sân',
                         style: TextStyle(

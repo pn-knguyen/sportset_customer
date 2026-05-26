@@ -45,6 +45,7 @@ class _RatingScreenState extends State<RatingScreen> {
       maxWidth: 1920,
       maxHeight: 1440,
     );
+    if (!mounted) return;
     if (image != null) {
       setState(() {
         _images.add(File(image.path));
@@ -93,15 +94,17 @@ class _RatingScreenState extends State<RatingScreen> {
           .doc(uid)
           .get();
       final customerData = customerDoc.data() ?? {};
-      final userName = (customerData['fullName'] ??
-              FirebaseAuth.instance.currentUser?.displayName ??
-              '')
-          .toString();
-      final userAvatar = (customerData['photoUrl'] ??
-              customerData['photoURL'] ??
-              FirebaseAuth.instance.currentUser?.photoURL ??
-              '')
-          .toString();
+      final userName =
+          (customerData['fullName'] ??
+                  FirebaseAuth.instance.currentUser?.displayName ??
+                  '')
+              .toString();
+      final userAvatar =
+          (customerData['photoUrl'] ??
+                  customerData['photoURL'] ??
+                  FirebaseAuth.instance.currentUser?.photoURL ??
+                  '')
+              .toString();
 
       // Upload images to Firebase Storage
       final List<String> imageUrls = [];
@@ -110,17 +113,16 @@ class _RatingScreenState extends State<RatingScreen> {
         if (bytes.isEmpty) continue;
         final fileName =
             'review_images/$uid/${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child(fileName);
+        final ref = FirebaseStorage.instance.ref().child(fileName);
         final UploadTask uploadTask = ref.putData(
           bytes,
           SettableMetadata(contentType: 'image/jpeg'),
         );
         // Dùng snapshotEvents.last thay vì await trực tiếp để tránh task bị treo
         final TaskSnapshot taskSnapshot = await uploadTask.snapshotEvents
-            .lastWhere((s) =>
-                s.state == TaskState.success || s.state == TaskState.error)
+            .lastWhere(
+              (s) => s.state == TaskState.success || s.state == TaskState.error,
+            )
             .timeout(const Duration(seconds: 60));
         if (taskSnapshot.state == TaskState.error) {
           throw Exception('Upload ảnh thất bại');
@@ -151,7 +153,9 @@ class _RatingScreenState extends State<RatingScreen> {
 
       // Mark booking as reviewed
       if (widget.bookingId.isNotEmpty) {
-        final bookingRef = firestore.collection('bookings').doc(widget.bookingId);
+        final bookingRef = firestore
+            .collection('bookings')
+            .doc(widget.bookingId);
         batch.update(bookingRef, {'hasReview': true});
       }
 
@@ -216,7 +220,10 @@ class _RatingScreenState extends State<RatingScreen> {
                         height: 40,
                         margin: const EdgeInsets.only(left: 8),
                         decoration: const BoxDecoration(shape: BoxShape.circle),
-                        child: const Icon(Icons.arrow_back, color: Color(0xFF006E1C)),
+                        child: const Icon(
+                          Icons.arrow_back,
+                          color: Color(0xFF006E1C),
+                        ),
                       ),
                     ),
                     const Expanded(
@@ -268,12 +275,14 @@ class _RatingScreenState extends State<RatingScreen> {
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) =>
                                     Container(
-                                  width: 80,
-                                  height: 80,
-                                  color: const Color(0xFFE8F5E9),
-                                  child: const Icon(Icons.sports_tennis,
-                                      color: Color(0xFF4CAF50)),
-                                ),
+                                      width: 80,
+                                      height: 80,
+                                      color: const Color(0xFFE8F5E9),
+                                      child: const Icon(
+                                        Icons.sports_tennis,
+                                        color: Color(0xFF4CAF50),
+                                      ),
+                                    ),
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -303,10 +312,13 @@ class _RatingScreenState extends State<RatingScreen> {
                                   const SizedBox(height: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF006E1C)
-                                          .withValues(alpha: 0.1),
+                                      color: const Color(
+                                        0xFF006E1C,
+                                      ).withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: const Text(
@@ -350,8 +362,9 @@ class _RatingScreenState extends State<RatingScreen> {
                                   });
                                 },
                                 child: Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                  ),
                                   child: Icon(
                                     index < _rating
                                         ? Icons.star_rounded
@@ -376,7 +389,9 @@ class _RatingScreenState extends State<RatingScreen> {
                         decoration: InputDecoration(
                           hintText: 'Hãy chia sẻ cảm nhận của bạn...',
                           hintStyle: TextStyle(
-                            color: const Color(0xFF6F7A6B).withValues(alpha: 0.5),
+                            color: const Color(
+                              0xFF6F7A6B,
+                            ).withValues(alpha: 0.5),
                             fontSize: 14,
                           ),
                           filled: true,
@@ -385,97 +400,110 @@ class _RatingScreenState extends State<RatingScreen> {
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                             borderSide: const BorderSide(
-                                color: Color(0xFFBECAB9), width: 1),
+                              color: Color(0xFFBECAB9),
+                              width: 1,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                             borderSide: const BorderSide(
-                                color: Color(0xFF006E1C), width: 1.5),
+                              color: Color(0xFF006E1C),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                         style: const TextStyle(
-                            fontSize: 14, color: Color(0xFF1A1C1C)),
+                          fontSize: 14,
+                          color: Color(0xFF1A1C1C),
+                        ),
                       ),
                       const SizedBox(height: 16),
 
                       // Image Grid
-                      LayoutBuilder(builder: (context, constraints) {
-                        final itemSize =
-                            (constraints.maxWidth - 32) / 3;
-                        return Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: [
-                            // Add Image Button
-                            GestureDetector(
-                              onTap: _pickImage,
-                              child: Container(
-                                width: itemSize,
-                                height: itemSize,
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: const Color(0xFFBECAB9),
-                                    width: 2,
-                                    style: BorderStyle.solid,
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final itemSize = (constraints.maxWidth - 32) / 3;
+                          return Wrap(
+                            spacing: 16,
+                            runSpacing: 16,
+                            children: [
+                              // Add Image Button
+                              GestureDetector(
+                                onTap: _pickImage,
+                                child: Container(
+                                  width: itemSize,
+                                  height: itemSize,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: const Color(0xFFBECAB9),
+                                      width: 2,
+                                      style: BorderStyle.solid,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.add_a_photo_outlined,
-                                        size: 28, color: Color(0xFF6F7A6B)),
-                                    SizedBox(height: 6),
-                                    Text(
-                                      'Thêm ảnh',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Icon(
+                                        Icons.add_a_photo_outlined,
+                                        size: 28,
                                         color: Color(0xFF6F7A6B),
+                                      ),
+                                      SizedBox(height: 6),
+                                      Text(
+                                        'Thêm ảnh',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF6F7A6B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Selected images
+                              ..._images.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final image = entry.value;
+                                return Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Image.file(
+                                        image,
+                                        width: itemSize,
+                                        height: itemSize,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: GestureDetector(
+                                        onTap: () => _removeImage(index),
+                                        child: Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ),
-                            // Selected images
-                            ..._images.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final image = entry.value;
-                              return Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Image.file(
-                                      image,
-                                      width: itemSize,
-                                      height: itemSize,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: GestureDetector(
-                                      onTap: () => _removeImage(index),
-                                      child: Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.black54,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(Icons.close,
-                                            size: 16, color: Colors.white),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }),
-                          ],
-                        );
-                      }),
+                                );
+                              }),
+                            ],
+                          );
+                        },
+                      ),
                       const SizedBox(height: 40),
 
                       // Submit Button
@@ -486,14 +514,16 @@ class _RatingScreenState extends State<RatingScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
                             gradient: _isSubmitting
-                                ? LinearGradient(colors: [
-                                    Colors.grey.shade400,
-                                    Colors.grey.shade500
-                                  ])
+                                ? LinearGradient(
+                                    colors: [
+                                      Colors.grey.shade400,
+                                      Colors.grey.shade500,
+                                    ],
+                                  )
                                 : const LinearGradient(
                                     colors: [
                                       Color(0xFF006E1C),
-                                      Color(0xFF4CAF50)
+                                      Color(0xFF4CAF50),
                                     ],
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
@@ -503,8 +533,9 @@ class _RatingScreenState extends State<RatingScreen> {
                                 ? null
                                 : [
                                     BoxShadow(
-                                      color: const Color(0xFF006E1C)
-                                          .withValues(alpha: 0.2),
+                                      color: const Color(
+                                        0xFF006E1C,
+                                      ).withValues(alpha: 0.2),
                                       blurRadius: 24,
                                       offset: const Offset(0, 8),
                                     ),
@@ -516,7 +547,9 @@ class _RatingScreenState extends State<RatingScreen> {
                                     width: 22,
                                     height: 22,
                                     child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2),
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                 )
                               : const Row(
@@ -531,8 +564,11 @@ class _RatingScreenState extends State<RatingScreen> {
                                       ),
                                     ),
                                     SizedBox(width: 8),
-                                    Icon(Icons.send_rounded,
-                                        color: Colors.white, size: 20),
+                                    Icon(
+                                      Icons.send_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
                                   ],
                                 ),
                         ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../../utils/route_arguments.dart';
 
 class BookingSuccessScreen extends StatefulWidget {
   const BookingSuccessScreen({super.key});
@@ -28,27 +29,29 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     }
     _didInitFromArgs = true;
 
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    if (args == null) {
+    final args = routeArguments(context);
+    if (args.isEmpty) {
       return;
     }
 
     _bookingId = args['bookingId']?.toString() ?? '';
 
     final incomingCourt = args['court'];
-    if (incomingCourt is Map) {
-      _court = Map<String, dynamic>.from(incomingCourt);
+    final incomingCourtMap = stringKeyedMap(incomingCourt);
+    if (incomingCourtMap != null) {
+      _court = incomingCourtMap;
     } else {
       _court = {
-        'name': (args['courtName'] ?? args['name'] ?? 'Sân thể thao').toString(),
+        'name': (args['courtName'] ?? args['name'] ?? 'Sân thể thao')
+            .toString(),
         'sportType': (args['sportType'] ?? '').toString(),
       };
     }
 
     final incomingDate = args['selectedDate'];
-    if (incomingDate is Map) {
-      _selectedDate = Map<String, dynamic>.from(incomingDate);
+    final incomingDateMap = stringKeyedMap(incomingDate);
+    if (incomingDateMap != null) {
+      _selectedDate = incomingDateMap;
     } else {
       final fallbackDate = (args['date'] ?? '').toString();
       if (fallbackDate.isNotEmpty) {
@@ -57,8 +60,9 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     }
 
     final incomingSlot = args['selectedSlot'];
-    if (incomingSlot is Map) {
-      _selectedSlot = Map<String, dynamic>.from(incomingSlot);
+    final incomingSlotMap = stringKeyedMap(incomingSlot);
+    if (incomingSlotMap != null) {
+      _selectedSlot = incomingSlotMap;
     } else {
       final fallbackTime = (args['time'] ?? '').toString();
       if (fallbackTime.contains('-')) {
@@ -213,11 +217,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
               ),
             ],
           ),
-          child: const Icon(
-            Icons.check,
-            size: 38,
-            color: Colors.white,
-          ),
+          child: const Icon(Icons.check, size: 38, color: Colors.white),
         ),
         const SizedBox(height: 8),
         const Text(
@@ -243,7 +243,8 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   }
 
   Widget _buildQRCodeSection() {
-    final imageUrl = _court['imageUrl']?.toString() ?? _court['image']?.toString() ?? '';
+    final imageUrl =
+        _court['imageUrl']?.toString() ?? _court['image']?.toString() ?? '';
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -340,10 +341,26 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
                           color: Color(0xFF1A1C1C),
                         ),
                       ),
-                      Positioned(top: 0, left: 0, child: _buildCorner(top: true, left: true)),
-                      Positioned(top: 0, right: 0, child: _buildCorner(top: true, left: false)),
-                      Positioned(bottom: 0, left: 0, child: _buildCorner(top: false, left: true)),
-                      Positioned(bottom: 0, right: 0, child: _buildCorner(top: false, left: false)),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: _buildCorner(top: true, left: true),
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: _buildCorner(top: true, left: false),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        child: _buildCorner(top: false, left: true),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: _buildCorner(top: false, left: false),
+                      ),
                     ],
                   ),
                 ),
@@ -371,10 +388,18 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       height: 16,
       decoration: BoxDecoration(
         border: Border(
-          top: top ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
-          bottom: !top ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
-          left: left ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
-          right: !left ? const BorderSide(color: Color(0xFF4CAF50), width: 2) : BorderSide.none,
+          top: top
+              ? const BorderSide(color: Color(0xFF4CAF50), width: 2)
+              : BorderSide.none,
+          bottom: !top
+              ? const BorderSide(color: Color(0xFF4CAF50), width: 2)
+              : BorderSide.none,
+          left: left
+              ? const BorderSide(color: Color(0xFF4CAF50), width: 2)
+              : BorderSide.none,
+          right: !left
+              ? const BorderSide(color: Color(0xFF4CAF50), width: 2)
+              : BorderSide.none,
         ),
       ),
     );
@@ -425,7 +450,9 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
             icon: Icons.stadium,
             label: 'TÊN SÂN',
             value: _courtName(),
-            subtitle: (_selectedSubCourt ?? '').trim().isNotEmpty ? _selectedSubCourt : null,
+            subtitle: (_selectedSubCourt ?? '').trim().isNotEmpty
+                ? _selectedSubCourt
+                : null,
           ),
           const SizedBox(height: 8),
           _buildDetailRow(
@@ -447,10 +474,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
             children: [
               Text(
                 'Thanh toán ($_paymentMethodLabel)',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF6F7A6B),
-                ),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF6F7A6B)),
               ),
               Text(
                 _formatCurrency(_totalPrice),

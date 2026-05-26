@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../utils/route_arguments.dart';
+import '../../utils/safe_values.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -44,11 +46,11 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
     _didInitFromArgs = true;
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final incomingCourt = args?['court'];
-    if (incomingCourt is Map) {
-      _court = Map<String, dynamic>.from(incomingCourt);
+    final args = routeArguments(context);
+    final incomingCourt = args['court'];
+    final incomingCourtMap = stringKeyedMap(incomingCourt);
+    if (incomingCourtMap != null) {
+      _court = incomingCourtMap;
     }
 
     _fieldImages = _extractImages(_court);
@@ -82,7 +84,8 @@ class _BookingScreenState extends State<BookingScreen> {
         'day': dayNames[date.weekday % 7],
         'date': date.day.toString().padLeft(2, '0'),
         'month': date.month.toString().padLeft(2, '0'),
-        'isWeekend': date.weekday == DateTime.saturday ||
+        'isWeekend':
+            date.weekday == DateTime.saturday ||
             date.weekday == DateTime.sunday,
         'dateTime': date,
       };
@@ -100,7 +103,8 @@ class _BookingScreenState extends State<BookingScreen> {
         }
       }
     }
-    final imageUrl = court['imageUrl']?.toString() ?? court['image']?.toString() ?? '';
+    final imageUrl =
+        court['imageUrl']?.toString() ?? court['image']?.toString() ?? '';
     if (imageUrl.isNotEmpty && !result.contains(imageUrl)) {
       result.insert(0, imageUrl);
     }
@@ -119,7 +123,8 @@ class _BookingScreenState extends State<BookingScreen> {
     }
     return source
         .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
+        .map(stringKeyedMap)
+        .whereType<Map<String, dynamic>>()
         .toList();
   }
 
@@ -162,18 +167,17 @@ class _BookingScreenState extends State<BookingScreen> {
       if (item is! Map) {
         continue;
       }
-      final map = Map<String, dynamic>.from(item);
+      final map = stringKeyedMap(item);
+      if (map == null) {
+        continue;
+      }
       final startTime = map['startTime']?.toString() ?? '';
       final endTime = map['endTime']?.toString() ?? '';
       final price = _toInt(map['price']);
       if (startTime.isEmpty || endTime.isEmpty) {
         continue;
       }
-      slots.add({
-        'startTime': startTime,
-        'endTime': endTime,
-        'price': price,
-      });
+      slots.add({'startTime': startTime, 'endTime': endTime, 'price': price});
     }
     return slots;
   }
@@ -222,7 +226,8 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   TimeOfDay get _operatingEnd {
-    if (_activePricingSlots.isEmpty) return const TimeOfDay(hour: 22, minute: 0);
+    if (_activePricingSlots.isEmpty)
+      return const TimeOfDay(hour: 22, minute: 0);
     return _activePricingSlots
         .map((s) => _parseTime(s['endTime']))
         .reduce((a, b) => _toMinutes(a) > _toMinutes(b) ? a : b);
@@ -365,10 +370,9 @@ class _BookingScreenState extends State<BookingScreen> {
     return '${buffer.toString()}đ';
   }
 
-  int get _totalPrice =>
-      (_startTime != null && _endTime != null)
-          ? _calculatePrice(_startTime!, _endTime!)
-          : 0;
+  int get _totalPrice => (_startTime != null && _endTime != null)
+      ? _calculatePrice(_startTime!, _endTime!)
+      : 0;
 
   bool get _isCourtAvailable => _isAvailableStatus(_court['status']);
 
@@ -389,7 +393,8 @@ class _BookingScreenState extends State<BookingScreen> {
 
   String get _bookBlockReason {
     if (!_isCourtAvailable) return 'Sân hiện không khả dụng để đặt.';
-    if (!_hasAvailableSubCourt) return 'Tất cả sân con đã đầy. Vui lòng chọn sân khác.';
+    if (!_hasAvailableSubCourt)
+      return 'Tất cả sân con đã đầy. Vui lòng chọn sân khác.';
     if (_startTime == null) return 'Vui lòng chọn giờ bắt đầu.';
     if (_endTime == null) return 'Vui lòng chọn giờ kết thúc.';
     return 'Vui lòng kiểm tra lại thông tin đặt sân.';
@@ -397,18 +402,72 @@ class _BookingScreenState extends State<BookingScreen> {
 
   String _normalizeAmenityText(String input) {
     const map = {
-      'à': 'a', 'á': 'a', 'ạ': 'a', 'ả': 'a', 'ã': 'a',
-      'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ậ': 'a', 'ẩ': 'a', 'ẫ': 'a',
-      'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ặ': 'a', 'ẳ': 'a', 'ẵ': 'a',
-      'è': 'e', 'é': 'e', 'ẹ': 'e', 'ẻ': 'e', 'ẽ': 'e',
-      'ê': 'e', 'ề': 'e', 'ế': 'e', 'ệ': 'e', 'ể': 'e', 'ễ': 'e',
-      'ì': 'i', 'í': 'i', 'ị': 'i', 'ỉ': 'i', 'ĩ': 'i',
-      'ò': 'o', 'ó': 'o', 'ọ': 'o', 'ỏ': 'o', 'õ': 'o',
-      'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ộ': 'o', 'ổ': 'o', 'ỗ': 'o',
-      'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ợ': 'o', 'ở': 'o', 'ỡ': 'o',
-      'ù': 'u', 'ú': 'u', 'ụ': 'u', 'ủ': 'u', 'ũ': 'u',
-      'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ự': 'u', 'ử': 'u', 'ữ': 'u',
-      'ỳ': 'y', 'ý': 'y', 'ỵ': 'y', 'ỷ': 'y', 'ỹ': 'y',
+      'à': 'a',
+      'á': 'a',
+      'ạ': 'a',
+      'ả': 'a',
+      'ã': 'a',
+      'â': 'a',
+      'ầ': 'a',
+      'ấ': 'a',
+      'ậ': 'a',
+      'ẩ': 'a',
+      'ẫ': 'a',
+      'ă': 'a',
+      'ằ': 'a',
+      'ắ': 'a',
+      'ặ': 'a',
+      'ẳ': 'a',
+      'ẵ': 'a',
+      'è': 'e',
+      'é': 'e',
+      'ẹ': 'e',
+      'ẻ': 'e',
+      'ẽ': 'e',
+      'ê': 'e',
+      'ề': 'e',
+      'ế': 'e',
+      'ệ': 'e',
+      'ể': 'e',
+      'ễ': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'ị': 'i',
+      'ỉ': 'i',
+      'ĩ': 'i',
+      'ò': 'o',
+      'ó': 'o',
+      'ọ': 'o',
+      'ỏ': 'o',
+      'õ': 'o',
+      'ô': 'o',
+      'ồ': 'o',
+      'ố': 'o',
+      'ộ': 'o',
+      'ổ': 'o',
+      'ỗ': 'o',
+      'ơ': 'o',
+      'ờ': 'o',
+      'ớ': 'o',
+      'ợ': 'o',
+      'ở': 'o',
+      'ỡ': 'o',
+      'ù': 'u',
+      'ú': 'u',
+      'ụ': 'u',
+      'ủ': 'u',
+      'ũ': 'u',
+      'ư': 'u',
+      'ừ': 'u',
+      'ứ': 'u',
+      'ự': 'u',
+      'ử': 'u',
+      'ữ': 'u',
+      'ỳ': 'y',
+      'ý': 'y',
+      'ỵ': 'y',
+      'ỷ': 'y',
+      'ỹ': 'y',
       'đ': 'd',
     };
     final buffer = StringBuffer();
@@ -421,25 +480,49 @@ class _BookingScreenState extends State<BookingScreen> {
   IconData _amenityIcon(String label) {
     final v = _normalizeAmenityText(label);
     if (v.contains('wifi') || v.contains('wi-fi')) return Icons.wifi;
-    if (v.contains('gui xe') || v.contains('bai xe') || v.contains('do xe') || v.contains('parking')) {
+    if (v.contains('gui xe') ||
+        v.contains('bai xe') ||
+        v.contains('do xe') ||
+        v.contains('parking')) {
       return Icons.local_parking;
     }
-    if (v.contains('nuoc uong') || v.contains('giai khat') || v.contains('drink') || v.contains('nuoc')) {
+    if (v.contains('nuoc uong') ||
+        v.contains('giai khat') ||
+        v.contains('drink') ||
+        v.contains('nuoc')) {
       return Icons.local_drink;
     }
     if (v.contains('tam') || v.contains('shower')) return Icons.shower;
-    if (v.contains('thay do') || v.contains('phong thay') || v.contains('locker')) return Icons.checkroom;
-    if (v.contains('wc') || v.contains('ve sinh') || v.contains('toilet') || v.contains('nha ve sinh')) {
+    if (v.contains('thay do') ||
+        v.contains('phong thay') ||
+        v.contains('locker'))
+      return Icons.checkroom;
+    if (v.contains('wc') ||
+        v.contains('ve sinh') ||
+        v.contains('toilet') ||
+        v.contains('nha ve sinh')) {
       return Icons.wc;
     }
-    if (v.contains('den') || v.contains('chieu sang') || v.contains('lighting')) return Icons.lightbulb;
-    if (v.contains('huan luyen') || v.contains('coach') || v.contains('trong tai')) return Icons.groups;
-    if (v.contains('dung cu') || v.contains('vot') || v.contains('thue') || v.contains('bong')) {
+    if (v.contains('den') || v.contains('chieu sang') || v.contains('lighting'))
+      return Icons.lightbulb;
+    if (v.contains('huan luyen') ||
+        v.contains('coach') ||
+        v.contains('trong tai'))
+      return Icons.groups;
+    if (v.contains('dung cu') ||
+        v.contains('vot') ||
+        v.contains('thue') ||
+        v.contains('bong')) {
       return Icons.sports;
     }
-    if (v.contains('bao ho') || v.contains('y te') || v.contains('first aid')) return Icons.health_and_safety;
-    if (v.contains('khan dai') || v.contains('tribune') || v.contains('grandstand')) return Icons.stadium;
-    if (v.contains('an') || v.contains('can tin') || v.contains('restaurant')) return Icons.restaurant;
+    if (v.contains('bao ho') || v.contains('y te') || v.contains('first aid'))
+      return Icons.health_and_safety;
+    if (v.contains('khan dai') ||
+        v.contains('tribune') ||
+        v.contains('grandstand'))
+      return Icons.stadium;
+    if (v.contains('an') || v.contains('can tin') || v.contains('restaurant'))
+      return Icons.restaurant;
     if (v.contains('xe') || v.contains('parking')) return Icons.local_parking;
     return Icons.check_circle_outline;
   }
@@ -524,10 +607,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
-                          colors: [
-                            Color(0xFFF9F9F9),
-                            Colors.transparent,
-                          ],
+                          colors: [Color(0xFFF9F9F9), Colors.transparent],
                         ),
                       ),
                     ),
@@ -569,7 +649,12 @@ class _BookingScreenState extends State<BookingScreen> {
       left: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 48, bottom: 16),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 48,
+          bottom: 16,
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -579,10 +664,7 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
             Row(
               children: [
-                _buildTopButton(
-                  icon: Icons.share,
-                  onPressed: () {},
-                ),
+                _buildTopButton(icon: Icons.share, onPressed: () {}),
                 const SizedBox(width: 12),
                 _buildTopButton(
                   icon: _isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -623,11 +705,7 @@ class _BookingScreenState extends State<BookingScreen> {
         ],
       ),
       child: IconButton(
-        icon: Icon(
-          icon,
-          color: color ?? const Color(0xFF1A1C1C),
-          size: 22,
-        ),
+        icon: Icon(icon, color: color ?? const Color(0xFF1A1C1C), size: 22),
         onPressed: onPressed,
         padding: EdgeInsets.zero,
       ),
@@ -641,8 +719,9 @@ class _BookingScreenState extends State<BookingScreen> {
     final rating = _toDouble(_court['rating'], fallback: 4.8);
     final status = _court['status']?.toString() ?? 'unknown';
     final facilityName = _court['facilityName']?.toString() ?? '';
-    final locationText =
-        distance != null && distance.isNotEmpty ? '$address • $distance km' : address;
+    final locationText = distance != null && distance.isNotEmpty
+        ? '$address • $distance km'
+        : address;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -657,117 +736,133 @@ class _BookingScreenState extends State<BookingScreen> {
         ],
       ),
       child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-        Text(
-          courtName,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF1A1C1C),
-            letterSpacing: -0.5,
-          ),
-        ),
-        if (facilityName.isNotEmpty) ...[
-          const SizedBox(height: 2),
-          Text(
-            facilityName,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF4CAF50),
-            ),
-          ),
-        ],
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _isAvailableStatus(status) ? 'Đang mở' : 'Đã đóng',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: _isAvailableStatus(status)
-                      ? const Color(0xFF006E1C)
-                      : const Color(0xFFBA1A1A),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      courtName,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1A1C1C),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    if (facilityName.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        facilityName,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF4CAF50),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            const Icon(Icons.location_on, size: 14, color: Color(0xFF6F7A6B)),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                locationText,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF6F7A6B)),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.only(top: 16),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: Color(0x26BECAB9), width: 1)),
-          ),
-          child: Row(
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.star, size: 18, color: Color(0xFFF59E0B)),
-                  const SizedBox(width: 4),
-                  Text(
-                    _avgRating != null
-                        ? _avgRating!.toStringAsFixed(1)
-                        : rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1C1C),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '($_reviewCount đánh giá)',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
-                  ),
-                ],
-              ),
               Container(
-                width: 1, height: 16,
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                color: const Color(0x4DBECAB9),
-              ),
-              const Icon(Icons.map, size: 16, color: Color(0xFF6F7A6B)),
-              const SizedBox(width: 4),
-              Text(
-                _distance ?? 'Đang xác định...',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _isAvailableStatus(status) ? 'Đang mở' : 'Đã đóng',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: _isAvailableStatus(status)
+                        ? const Color(0xFF006E1C)
+                        : const Color(0xFFBA1A1A),
+                  ),
+                ),
               ),
             ],
           ),
-        ),
-      ],
-    ));
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.location_on, size: 14, color: Color(0xFF6F7A6B)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  locationText,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF6F7A6B),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.only(top: 16),
+            decoration: const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Color(0x26BECAB9), width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.star, size: 18, color: Color(0xFFF59E0B)),
+                    const SizedBox(width: 4),
+                    Text(
+                      _avgRating != null
+                          ? _avgRating!.toStringAsFixed(1)
+                          : rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1C1C),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '($_reviewCount đánh giá)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6F7A6B),
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  width: 1,
+                  height: 16,
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  color: const Color(0x4DBECAB9),
+                ),
+                const Icon(Icons.map, size: 16, color: Color(0xFF6F7A6B)),
+                const SizedBox(width: 4),
+                Text(
+                  _distance ?? 'Đang xác định...',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6F7A6B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildAmenities() {
@@ -876,7 +971,10 @@ class _BookingScreenState extends State<BookingScreen> {
                   : null,
               borderRadius: BorderRadius.circular(18),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? const Color(0xFF4CAF50)
@@ -897,8 +995,8 @@ class _BookingScreenState extends State<BookingScreen> {
                       color: isSelected
                           ? Colors.white
                           : (isAvailable
-                              ? const Color(0xFF4CAF50)
-                              : Colors.red),
+                                ? const Color(0xFF4CAF50)
+                                : Colors.red),
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -909,8 +1007,8 @@ class _BookingScreenState extends State<BookingScreen> {
                         color: isSelected
                             ? Colors.white
                             : (isAvailable
-                                ? const Color(0xFF1A1C1C)
-                                : Colors.grey.shade600),
+                                  ? const Color(0xFF1A1C1C)
+                                  : Colors.grey.shade600),
                       ),
                     ),
                   ],
@@ -971,12 +1069,16 @@ class _BookingScreenState extends State<BookingScreen> {
                   height: 80,
                   margin: const EdgeInsets.only(right: 12),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF4CAF50) : const Color(0xFFF3F3F3),
+                    color: isSelected
+                        ? const Color(0xFF4CAF50)
+                        : const Color(0xFFF3F3F3),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFF4CAF50,
+                              ).withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
@@ -1002,7 +1104,9 @@ class _BookingScreenState extends State<BookingScreen> {
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: isSelected ? Colors.white : const Color(0xFF1A1C1C),
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF1A1C1C),
                         ),
                       ),
                     ],
@@ -1039,7 +1143,9 @@ class _BookingScreenState extends State<BookingScreen> {
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Color(0xFF4CAF50)),
+                  strokeWidth: 2,
+                  color: Color(0xFF4CAF50),
+                ),
               ),
           ],
         ),
@@ -1049,9 +1155,22 @@ class _BookingScreenState extends State<BookingScreen> {
           spacing: 16,
           runSpacing: 6,
           children: [
-            _buildLegendChip(const Color(0xFFE8E8E8), const Color(0xFFE8E8E8), 'Giờ còn trống'),
-            _buildLegendChip(const Color(0xFF4CAF50), const Color(0xFF4CAF50), 'Đã chọn'),
-            _buildLegendChip(const Color(0xFFFFEBEB), const Color(0xFFBA1A1A), 'Đã đặt', crossOut: true),
+            _buildLegendChip(
+              const Color(0xFFE8E8E8),
+              const Color(0xFFE8E8E8),
+              'Giờ còn trống',
+            ),
+            _buildLegendChip(
+              const Color(0xFF4CAF50),
+              const Color(0xFF4CAF50),
+              'Đã chọn',
+            ),
+            _buildLegendChip(
+              const Color(0xFFFFEBEB),
+              const Color(0xFFBA1A1A),
+              'Đã đặt',
+              crossOut: true,
+            ),
           ],
         ),
         const SizedBox(height: 20),
@@ -1078,9 +1197,10 @@ class _BookingScreenState extends State<BookingScreen> {
             child: const Text(
               'Hiện chưa có khung giờ khả dụng cho ngày này.',
               style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF006E1C),
-                  fontWeight: FontWeight.w600),
+                fontSize: 13,
+                color: Color(0xFF006E1C),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           )
         else
@@ -1099,8 +1219,10 @@ class _BookingScreenState extends State<BookingScreen> {
               final t = slots[idx];
               final isBooked = _isStartBooked(t);
               final isSelected =
-                  _startTime != null && _toMinutes(_startTime!) == _toMinutes(t);
-              final inRange = _startTime != null &&
+                  _startTime != null &&
+                  _toMinutes(_startTime!) == _toMinutes(t);
+              final inRange =
+                  _startTime != null &&
                   _endTime != null &&
                   _toMinutes(t) > _toMinutes(_startTime!) &&
                   _toMinutes(t) < _toMinutes(_endTime!);
@@ -1108,27 +1230,29 @@ class _BookingScreenState extends State<BookingScreen> {
                 onTap: isBooked
                     ? null
                     : () => setState(() {
-                          _startTime = t;
-                          _endTime = null;
-                        }),
+                        _startTime = t;
+                        _endTime = null;
+                      }),
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: isBooked
                         ? const Color(0xFFFFEBEB)
                         : (isSelected
-                            ? const Color(0xFF4CAF50)
-                            : (inRange
-                                ? const Color(0xFFC8E6C9)
-                                : const Color(0xFFE8E8E8))),
+                              ? const Color(0xFF4CAF50)
+                              : (inRange
+                                    ? const Color(0xFFC8E6C9)
+                                    : const Color(0xFFE8E8E8))),
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFF4CAF50,
+                              ).withValues(alpha: 0.3),
                               blurRadius: 6,
                               offset: const Offset(0, 3),
-                            )
+                            ),
                           ]
                         : null,
                   ),
@@ -1176,68 +1300,75 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          Builder(builder: (_) {
-            final endTs = _validEndTimes(_startTime!);
-            if (endTs.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50).withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  'Không có giờ kết thúc khả dụng từ giờ này.',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF006E1C)),
-                ),
-              );
-            }
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: EdgeInsets.zero,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                crossAxisSpacing: 6,
-                mainAxisSpacing: 6,
-                childAspectRatio: 1.7,
-              ),
-              itemCount: endTs.length,
-              itemBuilder: (context, idx) {
-                final t = endTs[idx];
-                final isSelected = _endTime != null &&
-                    _toMinutes(_endTime!) == _toMinutes(t);
-                return GestureDetector(
-                  onTap: () => setState(() => _endTime = t),
-                  child: Container(
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFFE8E8E8),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
-                              )
-                            ]
-                          : null,
-                    ),
-                    child: Text(
-                      _timeLabel(t),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : const Color(0xFF1A1C1C),
-                      ),
-                    ),
+          Builder(
+            builder: (_) {
+              final endTs = _validEndTimes(_startTime!);
+              if (endTs.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Không có giờ kết thúc khả dụng từ giờ này.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF006E1C)),
                   ),
                 );
-              },
-            );
-          }),
+              }
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                  childAspectRatio: 1.7,
+                ),
+                itemCount: endTs.length,
+                itemBuilder: (context, idx) {
+                  final t = endTs[idx];
+                  final isSelected =
+                      _endTime != null &&
+                      _toMinutes(_endTime!) == _toMinutes(t);
+                  return GestureDetector(
+                    onTap: () => setState(() => _endTime = t),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFFE8E8E8),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF4CAF50,
+                                  ).withValues(alpha: 0.3),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Text(
+                        _timeLabel(t),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF1A1C1C),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ],
 
         // ── Booking summary card ──────────────────────────────────────────
@@ -1249,22 +1380,28 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _buildLegendChip(Color bg, Color border, String label, {bool crossOut = false}) {
+  Widget _buildLegendChip(
+    Color bg,
+    Color border,
+    String label, {
+    bool crossOut = false,
+  }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 12,
           height: 12,
-          decoration: BoxDecoration(
-            color: bg,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF6F7A6B)),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF6F7A6B),
+          ),
         ),
       ],
     );
@@ -1299,7 +1436,9 @@ class _BookingScreenState extends State<BookingScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFBECAB9).withValues(alpha: 0.3)),
+        border: Border.all(
+          color: const Color(0xFFBECAB9).withValues(alpha: 0.3),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -1326,7 +1465,10 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -1356,22 +1498,27 @@ class _BookingScreenState extends State<BookingScreen> {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
-                    Text(item['label'] as String,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[700])),
+                    Text(
+                      item['label'] as String,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
+                    ),
                     const SizedBox(width: 6),
-                    Text('($timeStr)',
-                        style: TextStyle(
-                            fontSize: 11, color: Colors.grey[500])),
+                    Text(
+                      '($timeStr)',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
                     const Spacer(),
                     Text(
                       _formatCurrency(item['amount'] as int),
                       style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[700]),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
                     ),
                   ],
                 ),
@@ -1407,7 +1554,6 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-
   Widget _buildReviews() {
     final courtId = _court['id']?.toString() ?? '';
 
@@ -1415,10 +1561,10 @@ class _BookingScreenState extends State<BookingScreen> {
       stream: courtId.isEmpty
           ? null
           : FirebaseFirestore.instance
-              .collection('reviews')
-              .where('fieldId', isEqualTo: courtId)
-              .limit(20)
-              .snapshots(),
+                .collection('reviews')
+                .where('fieldId', isEqualTo: courtId)
+                .limit(20)
+                .snapshots(),
       builder: (context, snapshot) {
         final docs = (snapshot.data?.docs ?? [])
           ..sort((a, b) {
@@ -1430,16 +1576,17 @@ class _BookingScreenState extends State<BookingScreen> {
 
         final avg = docs.isEmpty
             ? 0.0
-            : docs.fold<double>(0,
+            : docs.fold<double>(
+                    0,
                     (acc, d) =>
-                        acc +
-                        ((d.data()['rating'] as num?)?.toDouble() ?? 0)) /
-                docs.length;
+                        acc + (toNullableDouble(d.data()['rating']) ?? 0),
+                  ) /
+                  docs.length;
 
         // Compute rating distribution
         final counts = List<int>.filled(6, 0);
         for (final d in docs) {
-          final r = ((d.data()['rating'] as num?)?.toInt() ?? 0).clamp(1, 5);
+          final r = toIntValue(d.data()['rating']).clamp(1, 5).toInt();
           counts[r]++;
         }
 
@@ -1563,10 +1710,12 @@ class _BookingScreenState extends State<BookingScreen> {
                   child: _buildReviewCard(
                     name: (data['userName'] ?? 'Ẩn danh').toString(),
                     avatar: data['userAvatar']?.toString(),
-                    rating: (data['rating'] as num?)?.toInt() ?? 0,
-                    time: _timeAgo(data['createdAt'] is Timestamp
-                        ? data['createdAt'] as Timestamp
-                        : null),
+                    rating: toIntValue(data['rating']),
+                    time: _timeAgo(
+                      data['createdAt'] is Timestamp
+                          ? data['createdAt'] as Timestamp
+                          : null,
+                    ),
                     content: (data['review'] ?? '').toString(),
                   ),
                 );
@@ -1616,10 +1765,7 @@ class _BookingScreenState extends State<BookingScreen> {
           width: 40,
           child: Text(
             '${(percentage * 100).toInt()}%',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6F7A6B),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
             textAlign: TextAlign.right,
           ),
         ),
@@ -1639,9 +1785,9 @@ class _BookingScreenState extends State<BookingScreen> {
           ? 0.0
           : docs.fold<double>(
                   0,
-                  (acc, d) =>
-                      acc + ((d.data()['rating'] as num?)?.toDouble() ?? 0)) /
-              docs.length;
+                  (acc, d) => acc + (toNullableDouble(d.data()['rating']) ?? 0),
+                ) /
+                docs.length;
       if (mounted) {
         setState(() {
           _avgRating = avg;
@@ -1652,8 +1798,8 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _fetchDistance(Map<String, dynamic> court) async {
-    double? lat = (court['latitude'] as num?)?.toDouble();
-    double? lng = (court['longitude'] as num?)?.toDouble();
+    double? lat = toNullableDouble(court['latitude']);
+    double? lng = toNullableDouble(court['longitude']);
 
     if (lat == null || lng == null) {
       final facilityId = court['facilityId']?.toString() ?? '';
@@ -1664,8 +1810,8 @@ class _BookingScreenState extends State<BookingScreen> {
             .doc(facilityId)
             .get();
         final data = doc.data();
-        lat = (data?['latitude'] as num?)?.toDouble();
-        lng = (data?['longitude'] as num?)?.toDouble();
+        lat = toNullableDouble(data?['latitude']);
+        lng = toNullableDouble(data?['longitude']);
       } catch (_) {
         return;
       }
@@ -1683,8 +1829,9 @@ class _BookingScreenState extends State<BookingScreen> {
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.low),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+        ),
       );
       final km = _distanceKm(pos.latitude, pos.longitude, lat, lng);
       final label = km < 1
@@ -1698,7 +1845,8 @@ class _BookingScreenState extends State<BookingScreen> {
     const r = 6371.0;
     final dLat = (lat2 - lat1) * pi / 180;
     final dLng = (lng2 - lng1) * pi / 180;
-    final a = sin(dLat / 2) * sin(dLat / 2) +
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
         cos(lat1 * pi / 180) *
             cos(lat2 * pi / 180) *
             sin(dLng / 2) *
@@ -1752,8 +1900,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           height: 38,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border:
-                                Border.all(color: const Color(0xFFC8E6C9)),
+                            border: Border.all(color: const Color(0xFFC8E6C9)),
                           ),
                           child: ClipOval(
                             child: Image.network(
@@ -1761,8 +1908,11 @@ class _BookingScreenState extends State<BookingScreen> {
                               fit: BoxFit.cover,
                               errorBuilder: (_, e, s) => Container(
                                 color: const Color(0xFFC8E6C9),
-                                child: const Icon(Icons.person,
-                                    size: 18, color: Color(0xFF4CAF50)),
+                                child: const Icon(
+                                  Icons.person,
+                                  size: 18,
+                                  color: Color(0xFF4CAF50),
+                                ),
                               ),
                             ),
                           ),
@@ -1776,9 +1926,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              name.isNotEmpty
-                                  ? name[0].toUpperCase()
-                                  : '?',
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
                               style: const TextStyle(
                                 color: Color(0xFF4CAF50),
                                 fontWeight: FontWeight.bold,
@@ -1800,13 +1948,16 @@ class _BookingScreenState extends State<BookingScreen> {
                         ),
                       ),
                       Row(
-                        children: List.generate(5, (i) => Icon(
-                          Icons.star,
-                          size: 12,
-                          color: i < rating
-                              ? const Color(0xFFFFA726)
-                              : Colors.grey[300],
-                        )),
+                        children: List.generate(
+                          5,
+                          (i) => Icon(
+                            Icons.star,
+                            size: 12,
+                            color: i < rating
+                                ? const Color(0xFFFFA726)
+                                : Colors.grey[300],
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1814,10 +1965,7 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
               Text(
                 time,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[400],
-                ),
+                style: TextStyle(fontSize: 10, color: Colors.grey[400]),
               ),
             ],
           ),
@@ -1904,66 +2052,66 @@ class _BookingScreenState extends State<BookingScreen> {
                       ),
                     ],
                   ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          if (!_canBook) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(_bookBlockReason),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                            return;
-                          }
-
-                          final selectedDate = _dates[_selectedDateIndex];
-                          Navigator.pushNamed(
-                            context,
-                            '/booking-confirmation',
-                            arguments: {
-                              'court': _court,
-                              'selectedSubCourt': _selectedSubCourt,
-                              'selectedDate': selectedDate,
-                              'selectedSlot': {
-                                'startTime': _timeLabel(_startTime!),
-                                'endTime': _timeLabel(_endTime!),
-                                'price': _totalPrice,
-                              },
-                              'duration': _durationLabel(_startTime!, _endTime!),
-                              'totalPrice': _totalPrice,
-                            },
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        if (!_canBook) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(_bookBlockReason),
+                              backgroundColor: Colors.red,
+                            ),
                           );
-                        },
-                        borderRadius: BorderRadius.circular(14),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _canBook ? 'Đặt sân ngay' : 'Không thể đặt',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Icon(
-                              _canBook ? Icons.bolt : Icons.block,
+                          return;
+                        }
+
+                        final selectedDate = _dates[_selectedDateIndex];
+                        Navigator.pushNamed(
+                          context,
+                          '/booking-confirmation',
+                          arguments: {
+                            'court': _court,
+                            'selectedSubCourt': _selectedSubCourt,
+                            'selectedDate': selectedDate,
+                            'selectedSlot': {
+                              'startTime': _timeLabel(_startTime!),
+                              'endTime': _timeLabel(_endTime!),
+                              'price': _totalPrice,
+                            },
+                            'duration': _durationLabel(_startTime!, _endTime!),
+                            'totalPrice': _totalPrice,
+                          },
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(14),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _canBook ? 'Đặt sân ngay' : 'Không thể đặt',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              size: 18,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            _canBook ? Icons.bolt : Icons.block,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
     );
   }
 }

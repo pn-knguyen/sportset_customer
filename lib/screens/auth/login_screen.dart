@@ -43,13 +43,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final credential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
       if (credential.user?.emailVerified != true) {
         await FirebaseAuth.instance.signOut();
-        setState(() => _emailError =
-            'Email chưa được xác thực. Vui lòng kiểm tra hộp thư và xác thực tài khoản.');
+        setState(
+          () => _emailError =
+              'Email chưa được xác thực. Vui lòng kiểm tra hộp thư và xác thực tài khoản.',
+        );
         return;
       }
 
@@ -95,9 +99,14 @@ class _LoginScreenState extends State<LoginScreen> {
         idToken: googleAuth.idToken,
       );
 
-      final userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
-      final user = userCredential.user!;
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final user = userCredential.user;
+      if (user == null) {
+        _showSnackBar('Đăng nhập Google thất bại. Vui lòng thử lại.');
+        return;
+      }
 
       // Create Firestore document if first time (new user).
       final docRef = FirebaseFirestore.instance
@@ -119,7 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacementNamed(context, '/main');
     } on FirebaseAuthException catch (e) {
       _showSnackBar(
-          e.message ?? 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+        e.message ?? 'Đăng nhập Google thất bại. Vui lòng thử lại.',
+      );
     } catch (_) {
       _showSnackBar('Đăng nhập Google thất bại. Vui lòng thử lại.');
     } finally {
@@ -140,16 +150,27 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final accessToken = loginResult.accessToken!;
-      final credential =
-          FacebookAuthProvider.credential(accessToken.tokenString);
+      final accessToken = loginResult.accessToken;
+      if (accessToken == null) {
+        _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        return;
+      }
+      final credential = FacebookAuthProvider.credential(
+        accessToken.tokenString,
+      );
 
-      final userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
-      final user = userCredential.user!;
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final user = userCredential.user;
+      if (user == null) {
+        _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        return;
+      }
 
-      final docRef =
-          FirebaseFirestore.instance.collection('customers').doc(user.uid);
+      final docRef = FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid);
       final doc = await docRef.get();
       if (!doc.exists) {
         final userData = await FacebookAuth.instance.getUserData(
@@ -169,7 +190,8 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacementNamed(context, '/main');
     } on FirebaseAuthException catch (e) {
       _showSnackBar(
-          e.message ?? 'Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        e.message ?? 'Đăng nhập Facebook thất bại. Vui lòng thử lại.',
+      );
     } catch (_) {
       _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
     } finally {
@@ -322,7 +344,8 @@ class _LoginScreenState extends State<LoginScreen> {
             border: Border.all(
               color: _emailError != null
                   ? const Color(0xFFF44336)
-                  : const Color(0xFFE2E8F0)),
+                  : const Color(0xFFE2E8F0),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -342,10 +365,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 vertical: 16,
               ),
             ),
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 16,
-            ),
+            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 16),
           ),
         ),
         if (_emailError != null)
@@ -353,10 +373,7 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.only(left: 16, top: 4),
             child: Text(
               _emailError!,
-              style: const TextStyle(
-                color: Color(0xFFF44336),
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Color(0xFFF44336), fontSize: 12),
             ),
           ),
         const SizedBox(height: 16),
@@ -380,7 +397,8 @@ class _LoginScreenState extends State<LoginScreen> {
             border: Border.all(
               color: _passwordError != null
                   ? const Color(0xFFF44336)
-                  : const Color(0xFFE2E8F0)),
+                  : const Color(0xFFE2E8F0),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -402,9 +420,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               suffixIcon: IconButton(
                 icon: Icon(
-                  _isPasswordVisible
-                      ? Icons.visibility
-                      : Icons.visibility_off,
+                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
                   color: const Color(0xFF64748B),
                 ),
                 onPressed: () {
@@ -414,10 +430,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
             ),
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 16,
-            ),
+            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 16),
           ),
         ),
         if (_passwordError != null)
@@ -425,10 +438,7 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.only(left: 16, top: 4),
             child: Text(
               _passwordError!,
-              style: const TextStyle(
-                color: Color(0xFFF44336),
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Color(0xFFF44336), fontSize: 12),
             ),
           ),
         // Forgot password link
@@ -504,12 +514,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(
-          child: Container(
-            height: 1,
-            color: const Color(0xFFE2E8F0),
-          ),
-        ),
+        Expanded(child: Container(height: 1, color: const Color(0xFFE2E8F0))),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Text(
@@ -521,12 +526,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-        Expanded(
-          child: Container(
-            height: 1,
-            color: const Color(0xFFE2E8F0),
-          ),
-        ),
+        Expanded(child: Container(height: 1, color: const Color(0xFFE2E8F0))),
       ],
     );
   }
@@ -642,9 +642,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return SizedBox(
       width: 24,
       height: 24,
-      child: CustomPaint(
-        painter: _GoogleLogoPainter(),
-      ),
+      child: CustomPaint(painter: _GoogleLogoPainter()),
     );
   }
 
@@ -654,10 +652,7 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         const Text(
           'Chưa có tài khoản?',
-          style: TextStyle(
-            color: Color(0xFF64748B),
-            fontSize: 14,
-          ),
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
         ),
         TextButton(
           onPressed: () {
@@ -691,24 +686,33 @@ class _GoogleLogoPainter extends CustomPainter {
     final bluePath = Path();
     bluePath.moveTo(22.56 * scaleX, 12.25 * scaleY);
     bluePath.cubicTo(
-      22.56 * scaleX, 11.47 * scaleY,
-      22.49 * scaleX, 10.72 * scaleY,
-      22.36 * scaleX, 10.0 * scaleY,
+      22.56 * scaleX,
+      11.47 * scaleY,
+      22.49 * scaleX,
+      10.72 * scaleY,
+      22.36 * scaleX,
+      10.0 * scaleY,
     );
     bluePath.lineTo(12 * scaleX, 10.0 * scaleY);
     bluePath.lineTo(12 * scaleX, 14.26 * scaleY);
     bluePath.lineTo(17.92 * scaleX, 14.26 * scaleY);
     bluePath.cubicTo(
-      17.66 * scaleX, 15.63 * scaleY,
-      16.88 * scaleX, 16.79 * scaleY,
-      15.71 * scaleX, 17.57 * scaleY,
+      17.66 * scaleX,
+      15.63 * scaleY,
+      16.88 * scaleX,
+      16.79 * scaleY,
+      15.71 * scaleX,
+      17.57 * scaleY,
     );
     bluePath.lineTo(15.71 * scaleX, 20.34 * scaleY);
     bluePath.lineTo(19.28 * scaleX, 20.34 * scaleY);
     bluePath.cubicTo(
-      21.36 * scaleX, 18.42 * scaleY,
-      22.56 * scaleX, 15.6 * scaleY,
-      22.56 * scaleX, 12.25 * scaleY,
+      21.36 * scaleX,
+      18.42 * scaleY,
+      22.56 * scaleX,
+      15.6 * scaleY,
+      22.56 * scaleX,
+      12.25 * scaleY,
     );
     bluePath.close();
     canvas.drawPath(bluePath, paint);
@@ -718,27 +722,39 @@ class _GoogleLogoPainter extends CustomPainter {
     final greenPath = Path();
     greenPath.moveTo(12 * scaleX, 23 * scaleY);
     greenPath.cubicTo(
-      14.97 * scaleX, 23 * scaleY,
-      17.46 * scaleX, 22.02 * scaleY,
-      19.28 * scaleX, 20.34 * scaleY,
+      14.97 * scaleX,
+      23 * scaleY,
+      17.46 * scaleX,
+      22.02 * scaleY,
+      19.28 * scaleX,
+      20.34 * scaleY,
     );
     greenPath.lineTo(15.71 * scaleX, 17.57 * scaleY);
     greenPath.cubicTo(
-      14.73 * scaleX, 18.23 * scaleY,
-      13.48 * scaleX, 18.63 * scaleY,
-      12 * scaleX, 18.63 * scaleY,
+      14.73 * scaleX,
+      18.23 * scaleY,
+      13.48 * scaleX,
+      18.63 * scaleY,
+      12 * scaleX,
+      18.63 * scaleY,
     );
     greenPath.cubicTo(
-      9.14 * scaleX, 18.63 * scaleY,
-      6.71 * scaleX, 16.7 * scaleY,
-      5.84 * scaleX, 14.1 * scaleY,
+      9.14 * scaleX,
+      18.63 * scaleY,
+      6.71 * scaleX,
+      16.7 * scaleY,
+      5.84 * scaleX,
+      14.1 * scaleY,
     );
     greenPath.lineTo(2.18 * scaleX, 14.1 * scaleY);
     greenPath.lineTo(2.18 * scaleX, 16.94 * scaleY);
     greenPath.cubicTo(
-      3.99 * scaleX, 20.53 * scaleY,
-      7.7 * scaleX, 23 * scaleY,
-      12 * scaleX, 23 * scaleY,
+      3.99 * scaleX,
+      20.53 * scaleY,
+      7.7 * scaleX,
+      23 * scaleY,
+      12 * scaleX,
+      23 * scaleY,
     );
     greenPath.close();
     canvas.drawPath(greenPath, paint);
@@ -748,26 +764,38 @@ class _GoogleLogoPainter extends CustomPainter {
     final yellowPath = Path();
     yellowPath.moveTo(5.84 * scaleX, 14.09 * scaleY);
     yellowPath.cubicTo(
-      5.62 * scaleX, 13.43 * scaleY,
-      5.49 * scaleX, 12.73 * scaleY,
-      5.49 * scaleX, 12 * scaleY,
+      5.62 * scaleX,
+      13.43 * scaleY,
+      5.49 * scaleX,
+      12.73 * scaleY,
+      5.49 * scaleX,
+      12 * scaleY,
     );
     yellowPath.cubicTo(
-      5.49 * scaleX, 11.27 * scaleY,
-      5.62 * scaleX, 10.57 * scaleY,
-      5.84 * scaleX, 9.91 * scaleY,
+      5.49 * scaleX,
+      11.27 * scaleY,
+      5.62 * scaleX,
+      10.57 * scaleY,
+      5.84 * scaleX,
+      9.91 * scaleY,
     );
     yellowPath.lineTo(5.84 * scaleX, 7.07 * scaleY);
     yellowPath.lineTo(2.18 * scaleX, 7.07 * scaleY);
     yellowPath.cubicTo(
-      1.43 * scaleX, 8.55 * scaleY,
-      1 * scaleX, 10.22 * scaleY,
-      1 * scaleX, 12 * scaleY,
+      1.43 * scaleX,
+      8.55 * scaleY,
+      1 * scaleX,
+      10.22 * scaleY,
+      1 * scaleX,
+      12 * scaleY,
     );
     yellowPath.cubicTo(
-      1 * scaleX, 13.78 * scaleY,
-      1.43 * scaleX, 15.45 * scaleY,
-      2.18 * scaleX, 16.93 * scaleY,
+      1 * scaleX,
+      13.78 * scaleY,
+      1.43 * scaleX,
+      15.45 * scaleY,
+      2.18 * scaleX,
+      16.93 * scaleY,
     );
     yellowPath.lineTo(5.03 * scaleX, 14.71 * scaleY);
     yellowPath.lineTo(5.84 * scaleX, 14.09 * scaleY);
@@ -779,26 +807,38 @@ class _GoogleLogoPainter extends CustomPainter {
     final redPath = Path();
     redPath.moveTo(12 * scaleX, 5.38 * scaleY);
     redPath.cubicTo(
-      13.62 * scaleX, 5.38 * scaleY,
-      15.06 * scaleX, 5.94 * scaleY,
-      16.21 * scaleX, 7.04 * scaleY,
+      13.62 * scaleX,
+      5.38 * scaleY,
+      15.06 * scaleX,
+      5.94 * scaleY,
+      16.21 * scaleX,
+      7.04 * scaleY,
     );
     redPath.lineTo(19.36 * scaleX, 3.89 * scaleY);
     redPath.cubicTo(
-      17.45 * scaleX, 2.09 * scaleY,
-      14.97 * scaleX, 1 * scaleY,
-      12 * scaleX, 1 * scaleY,
+      17.45 * scaleX,
+      2.09 * scaleY,
+      14.97 * scaleX,
+      1 * scaleY,
+      12 * scaleX,
+      1 * scaleY,
     );
     redPath.cubicTo(
-      7.7 * scaleX, 1 * scaleY,
-      3.99 * scaleX, 3.47 * scaleY,
-      2.18 * scaleX, 7.07 * scaleY,
+      7.7 * scaleX,
+      1 * scaleY,
+      3.99 * scaleX,
+      3.47 * scaleY,
+      2.18 * scaleX,
+      7.07 * scaleY,
     );
     redPath.lineTo(5.84 * scaleX, 9.91 * scaleY);
     redPath.cubicTo(
-      6.71 * scaleX, 7.31 * scaleY,
-      9.14 * scaleX, 5.38 * scaleY,
-      12 * scaleX, 5.38 * scaleY,
+      6.71 * scaleX,
+      7.31 * scaleY,
+      9.14 * scaleX,
+      5.38 * scaleY,
+      12 * scaleX,
+      5.38 * scaleY,
     );
     redPath.close();
     canvas.drawPath(redPath, paint);

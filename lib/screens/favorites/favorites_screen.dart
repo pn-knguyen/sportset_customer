@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../utils/safe_values.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -33,8 +34,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.low),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+        ),
       );
       if (mounted) setState(() => _userPosition = pos);
     } catch (_) {}
@@ -42,13 +44,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   Future<void> _loadFacilityCoords() async {
     try {
-      final snap =
-          await FirebaseFirestore.instance.collection('facilities').get();
+      final snap = await FirebaseFirestore.instance
+          .collection('facilities')
+          .get();
       final coords = <String, Map<String, double>>{};
       for (final doc in snap.docs) {
         final data = doc.data();
-        final lat = (data['latitude'] as num?)?.toDouble();
-        final lng = (data['longitude'] as num?)?.toDouble();
+        final lat = toNullableDouble(data['latitude']);
+        final lng = toNullableDouble(data['longitude']);
         if (lat != null && lng != null) {
           coords[doc.id] = {'lat': lat, 'lng': lng};
         }
@@ -63,23 +66,28 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
     final coords = _facilityCoords[facilityId];
     if (coords == null) return '';
-    final lat2 = coords['lat']!;
-    final lng2 = coords['lng']!;
+    final lat2 = coords['lat'];
+    final lng2 = coords['lng'];
+    final userPosition = _userPosition;
+    if (lat2 == null || lng2 == null || userPosition == null) return '';
     const r = 6371.0;
-    final dLat = (lat2 - _userPosition!.latitude) * pi / 180;
-    final dLng = (lng2 - _userPosition!.longitude) * pi / 180;
+    final dLat = (lat2 - userPosition.latitude) * pi / 180;
+    final dLng = (lng2 - userPosition.longitude) * pi / 180;
     final sinDLat = sin(dLat / 2);
     final sinDLng = sin(dLng / 2);
-    final c = 2 *
-        asin(sqrt(sinDLat * sinDLat +
-            cos(_userPosition!.latitude * pi / 180) *
-                cos(lat2 * pi / 180) *
-                sinDLng *
-                sinDLng));
+    final c =
+        2 *
+        asin(
+          sqrt(
+            sinDLat * sinDLat +
+                cos(userPosition.latitude * pi / 180) *
+                    cos(lat2 * pi / 180) *
+                    sinDLng *
+                    sinDLng,
+          ),
+        );
     final km = r * c;
-    return km < 1
-        ? '${(km * 1000).round()} m'
-        : '${km.toStringAsFixed(1)} km';
+    return km < 1 ? '${(km * 1000).round()} m' : '${km.toStringAsFixed(1)} km';
   }
 
   Future<void> _removeFavorite(String courtId) async {
@@ -111,7 +119,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       Navigator.pushNamed(
         context,
         '/booking',
-        arguments: {'court': <String, dynamic>{'id': courtId}},
+        arguments: {
+          'court': <String, dynamic>{'id': courtId},
+        },
       );
     }
   }
@@ -135,7 +145,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             _buildHeader(),
             Expanded(
               child: uid == null
-                  ? const Center(child: Text('Vui lòng đăng nhập để xem yêu thích'))
+                  ? const Center(
+                      child: Text('Vui lòng đăng nhập để xem yêu thích'),
+                    )
                   : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('favorites')
@@ -144,16 +156,22 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           .orderBy('savedAt', descending: true)
                           .snapshots(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting &&
+                        if (snapshot.connectionState ==
+                                ConnectionState.waiting &&
                             !snapshot.hasData) {
                           return const Center(
-                              child: CircularProgressIndicator(
-                                  color: Color(0xFF4CAF50)));
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF4CAF50),
+                            ),
+                          );
                         }
                         if (snapshot.hasError) {
                           return Center(
-                              child: Text('Lỗi: ${snapshot.error}',
-                                  style: const TextStyle(color: Colors.red)));
+                            child: Text(
+                              'Lỗi: ${snapshot.error}',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          );
                         }
                         final docs = snapshot.data?.docs ?? [];
                         if (docs.isEmpty) {
@@ -175,7 +193,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             ),
                             Expanded(
                               child: ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  16,
+                                ),
                                 itemCount: docs.length,
                                 itemBuilder: (context, index) {
                                   final data = docs[index].data();
@@ -230,9 +253,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           end: Alignment.bottomCenter,
           colors: [Color(0xFFE8F5E9), Color(0xF2E8F5E9)],
         ),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFC8E6C9), width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFC8E6C9), width: 1)),
       ),
       child: SafeArea(
         bottom: false,
@@ -280,8 +301,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
                   child: Image.network(
                     venue['image']?.toString() ?? '',
                     height: 224,
@@ -290,8 +312,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     errorBuilder: (context, error, stack) => Container(
                       height: 224,
                       color: Colors.grey[200],
-                      child: const Icon(Icons.image,
-                          size: 48, color: Colors.grey),
+                      child: const Icon(
+                        Icons.image,
+                        size: 48,
+                        color: Colors.grey,
+                      ),
                     ),
                   ),
                 ),
@@ -301,7 +326,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   left: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(8),
@@ -316,12 +343,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.star,
-                            color: Color(0xFF4CAF50), size: 14),
+                        const Icon(
+                          Icons.star,
+                          color: Color(0xFF4CAF50),
+                          size: 14,
+                        ),
                         const SizedBox(width: 3),
                         Text(
-                          ((venue['rating'] as num?)?.toStringAsFixed(1)) ??
-                              '0.0',
+                          (toNullableDouble(venue['rating']) ?? 0)
+                              .toStringAsFixed(1),
                           style: const TextStyle(
                             color: Color(0xFF1A1C1C),
                             fontSize: 12,
@@ -352,8 +382,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.favorite,
-                          color: Colors.red, size: 20),
+                      child: const Icon(
+                        Icons.favorite,
+                        color: Colors.red,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ),
@@ -403,27 +436,33 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   // Location + distance
                   Row(
                     children: [
-                      Icon(Icons.location_on,
-                          size: 14, color: Colors.grey[500]),
+                      Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.grey[500],
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           venue['address']?.toString() ?? '',
                           style: TextStyle(
-                              color: Colors.grey[600], fontSize: 13),
+                            color: Colors.grey[600],
+                            fontSize: 13,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (distLabel.isNotEmpty) ...[
                         const SizedBox(width: 12),
-                        Icon(Icons.near_me,
-                            size: 14, color: Colors.grey[500]),
+                        Icon(Icons.near_me, size: 14, color: Colors.grey[500]),
                         const SizedBox(width: 4),
                         Text(
                           distLabel,
                           style: TextStyle(
-                              fontSize: 13, color: Colors.grey[600]),
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
                         ),
                       ],
                     ],
@@ -444,8 +483,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: [
                           BoxShadow(
-                            color:
-                                const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                            color: const Color(
+                              0xFF4CAF50,
+                            ).withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),

@@ -24,7 +24,8 @@ class MoMoService {
     const requestType = 'payWithMethod';
 
     // Build raw signature string exactly as required by MoMo
-    final rawSignature = 'accessKey=$_accessKey'
+    final rawSignature =
+        'accessKey=$_accessKey'
         '&amount=$amount'
         '&extraData=$extraData'
         '&ipnUrl=$_ipnUrl'
@@ -64,8 +65,13 @@ class MoMoService {
       throw Exception('MoMo request failed (HTTP ${response.statusCode})');
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final payUrl = data['payUrl'] as String?;
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('MoMo response không hợp lệ');
+    }
+
+    final data = decoded;
+    final payUrl = data['payUrl']?.toString();
     if (payUrl == null || payUrl.isEmpty) {
       final msg = data['message'] ?? 'Lỗi không xác định từ MoMo';
       throw Exception(msg.toString());

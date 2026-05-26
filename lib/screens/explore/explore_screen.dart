@@ -1,9 +1,10 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../utils/safe_values.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -17,8 +18,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   static const double _nearbyRadiusKm = 15.0;
 
   final TextEditingController _searchController = TextEditingController();
-  final PageController _pageController =
-      PageController(viewportFraction: 0.88);
+  final PageController _pageController = PageController(viewportFraction: 0.88);
 
   GoogleMapController? _mapController;
   LatLng? _userLocation;
@@ -42,19 +42,22 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Map<String, dynamic> _facilityFromDoc(
-      Map<String, dynamic> data, String docId) {
+    Map<String, dynamic> data,
+    String docId,
+  ) {
     return {
       'id': docId,
       'name': data['name']?.toString() ?? 'Chưa có tên cơ sở',
-      'image': data['imageUrl']?.toString() ??
+      'image':
+          data['imageUrl']?.toString() ??
           data['image']?.toString() ??
           'https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80',
       'rating': _toDouble(data['rating'], fallback: 0),
       'address': data['address']?.toString() ?? 'Chưa cập nhật địa chỉ',
       'openTime': data['openTime']?.toString() ?? '',
       'closeTime': data['closeTime']?.toString() ?? '',
-      'latitude': (data['latitude'] as num?)?.toDouble(),
-      'longitude': (data['longitude'] as num?)?.toDouble(),
+      'latitude': toNullableDouble(data['latitude']),
+      'longitude': toNullableDouble(data['longitude']),
       'detailData': Map<String, dynamic>.from(data)..['id'] = docId,
     };
   }
@@ -65,12 +68,17 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final dLng = (b.longitude - a.longitude) * pi / 180;
     final sinDLat = sin(dLat / 2);
     final sinDLng = sin(dLng / 2);
-    final c = 2 *
-        asin(sqrt(sinDLat * sinDLat +
-            cos(a.latitude * pi / 180) *
-                cos(b.latitude * pi / 180) *
-                sinDLng *
-                sinDLng));
+    final c =
+        2 *
+        asin(
+          sqrt(
+            sinDLat * sinDLat +
+                cos(a.latitude * pi / 180) *
+                    cos(b.latitude * pi / 180) *
+                    sinDLng *
+                    sinDLng,
+          ),
+        );
     return r * c;
   }
 
@@ -87,8 +95,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
         final text = '${v['name']} ${v['address']}'.toLowerCase();
         if (!text.contains(query)) return false;
       }
-      final lat = v['latitude'] as double?;
-      final lng = v['longitude'] as double?;
+      final lat = toNullableDouble(v['latitude']);
+      final lng = toNullableDouble(v['longitude']);
       if (_userLocation != null && lat != null && lng != null) {
         final d = _distanceKm(_userLocation!, LatLng(lat, lng));
         if (d > _nearbyRadiusKm) return false;
@@ -108,7 +116,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       }
       if (perm == LocationPermission.denied ||
           perm == LocationPermission.deniedForever) {
-        setState(() => _isLocating = false);
+        if (mounted) setState(() => _isLocating = false);
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
@@ -141,9 +149,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   void _onPageChanged(int index, List<Map<String, dynamic>> venues) {
+    if (index < 0 || index >= venues.length) return;
     setState(() => _selectedIndex = index);
-    final lat = venues[index]['latitude'] as double?;
-    final lng = venues[index]['longitude'] as double?;
+    final lat = toNullableDouble(venues[index]['latitude']);
+    final lng = toNullableDouble(venues[index]['longitude']);
     if (lat != null && lng != null) {
       _mapController?.animateCamera(
         CameraUpdate.newCameraPosition(
@@ -160,20 +169,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
         .collection('courts')
         .snapshots()
         .listen((snap) {
-      _courtFacilityMap = {
-        for (final doc in snap.docs)
-          doc.id: doc.data()['facilityId']?.toString() ?? ''
-      };
-      _recomputeFacilityRatings();
-    });
+          _courtFacilityMap = {
+            for (final doc in snap.docs)
+              doc.id: doc.data()['facilityId']?.toString() ?? '',
+          };
+          _recomputeFacilityRatings();
+        });
 
     _reviewSub = FirebaseFirestore.instance
         .collection('reviews')
         .snapshots()
         .listen((snap) {
-      _reviewDocs = snap.docs;
-      _recomputeFacilityRatings();
-    });
+          _reviewDocs = snap.docs;
+          _recomputeFacilityRatings();
+        });
   }
 
   void _recomputeFacilityRatings() {
@@ -182,7 +191,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final data = doc.data();
       final courtId = data['fieldId']?.toString() ?? '';
       final facilityId = _courtFacilityMap[courtId] ?? '';
-      final r = (data['rating'] as num?)?.toDouble();
+      final r = toNullableDouble(data['rating']);
       if (facilityId.isNotEmpty && r != null) {
         buckets.putIfAbsent(facilityId, () => []).add(r);
       }
@@ -222,11 +231,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('facilities')
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('facilities').snapshots(),
         builder: (context, snap) {
-          final all = snap.data?.docs
+          final all =
+              snap.data?.docs
                   .map((d) => _facilityFromDoc(d.data(), d.id))
                   .toList() ??
               [];
@@ -266,31 +274,37 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final markers = <Marker>{};
     for (var i = 0; i < venues.length; i++) {
       final v = venues[i];
-      final lat = v['latitude'] as double?;
-      final lng = v['longitude'] as double?;
+      final lat = toNullableDouble(v['latitude']);
+      final lng = toNullableDouble(v['longitude']);
       if (lat == null || lng == null) continue;
       final isSelected = i == _selectedIndex;
-      markers.add(Marker(
-        markerId: MarkerId(v['id'] as String),
-        position: LatLng(lat, lng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          isSelected ? BitmapDescriptor.hueRed : BitmapDescriptor.hueGreen,
+      final rawId = v['id']?.toString() ?? '';
+      final id = rawId.isEmpty ? 'venue_$i' : rawId;
+      markers.add(
+        Marker(
+          markerId: MarkerId(id),
+          position: LatLng(lat, lng),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            isSelected ? BitmapDescriptor.hueRed : BitmapDescriptor.hueGreen,
+          ),
+          zIndex: isSelected ? 1 : 0,
+          onTap: () => _onMarkerTap(i, LatLng(lat, lng)),
         ),
-        zIndex: isSelected ? 1 : 0,
-        onTap: () => _onMarkerTap(i, LatLng(lat, lng)),
-      ));
+      );
     }
 
     final circles = <Circle>{};
     if (_userLocation != null) {
-      circles.add(Circle(
-        circleId: const CircleId('radius'),
-        center: _userLocation!,
-        radius: _nearbyRadiusKm * 1000,
-        strokeColor: const Color(0xFF4CAF50),
-        strokeWidth: 1,
-        fillColor: const Color(0xFF4CAF50).withValues(alpha: 0.06),
-      ));
+      circles.add(
+        Circle(
+          circleId: const CircleId('radius'),
+          center: _userLocation!,
+          radius: _nearbyRadiusKm * 1000,
+          strokeColor: const Color(0xFF4CAF50),
+          strokeWidth: 1,
+          fillColor: const Color(0xFF4CAF50).withValues(alpha: 0.06),
+        ),
+      );
     }
 
     return GoogleMap(
@@ -338,15 +352,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   onChanged: (_) => setState(() => _selectedIndex = -1),
                   decoration: InputDecoration(
                     hintText: 'Tìm cơ sở, khu vực...',
-                    hintStyle:
-                        TextStyle(color: Colors.grey[400], fontSize: 13),
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   style: const TextStyle(
-                      fontSize: 13, color: Color(0xFF1A237E)),
+                    fontSize: 13,
+                    color: Color(0xFF1A237E),
+                  ),
                 ),
               ),
               if (_searchController.text.isNotEmpty)
@@ -357,14 +371,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   },
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 10),
-                    child:
-                        Icon(Icons.close, size: 18, color: Colors.grey),
+                    child: Icon(Icons.close, size: 18, color: Colors.grey),
                   ),
                 ),
               Container(
                 margin: const EdgeInsets.only(right: 10),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF0C1C46),
                   borderRadius: BorderRadius.circular(20),
@@ -372,8 +387,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.near_me,
-                        size: 11, color: Colors.white),
+                    const Icon(Icons.near_me, size: 11, color: Colors.white),
                     const SizedBox(width: 4),
                     Text(
                       '$count cơ sở',
@@ -409,8 +423,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 color: Color(0xFF0C1C46),
               ),
             )
-          : const Icon(Icons.my_location,
-              color: Color(0xFF0C1C46), size: 20),
+          : const Icon(Icons.my_location, color: Color(0xFF0C1C46), size: 20),
     );
   }
 
@@ -437,24 +450,22 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _buildVenueCard(Map<String, dynamic> v, bool isSelected) {
     final distLabel = _distanceLabel(
       _userLocation,
-      v['latitude'] as double?,
-      v['longitude'] as double?,
+      toNullableDouble(v['latitude']),
+      toNullableDouble(v['longitude']),
     );
-    final open = v['openTime'] as String;
-    final close = v['closeTime'] as String;
-    final hours =
-        open.isNotEmpty && close.isNotEmpty ? '$open - $close' : 'Liên hệ';
-    final facilityId = v['id'] as String? ?? '';
+    final open = v['openTime']?.toString() ?? '';
+    final close = v['closeTime']?.toString() ?? '';
+    final hours = open.isNotEmpty && close.isNotEmpty
+        ? '$open - $close'
+        : 'Liên hệ';
+    final facilityId = v['id']?.toString() ?? '';
     final avgRating = _facilityRatings[facilityId];
     final reviewCount = _facilityReviewCounts[facilityId] ?? 0;
     final hasRating = avgRating != null && reviewCount > 0;
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(
-        context,
-        '/venue-detail',
-        arguments: v['id'] as String,
-      ),
+      onTap: () =>
+          Navigator.pushNamed(context, '/venue-detail', arguments: facilityId),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
@@ -482,7 +493,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 bottomLeft: Radius.circular(20),
               ),
               child: Image.network(
-                v['image'] as String? ?? '',
+                v['image']?.toString() ?? '',
                 width: 110,
                 height: 180,
                 fit: BoxFit.cover,
@@ -490,8 +501,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   width: 110,
                   height: 180,
                   color: Colors.grey[200],
-                  child: const Icon(Icons.image,
-                      color: Colors.grey, size: 32),
+                  child: const Icon(Icons.image, color: Colors.grey, size: 32),
                 ),
               ),
             ),
@@ -504,7 +514,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      v['name'] as String? ?? '',
+                      v['name']?.toString() ?? '',
                       style: const TextStyle(
                         color: Color(0xFF1A237E),
                         fontSize: 14,
@@ -516,14 +526,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.location_on,
-                            size: 12, color: Colors.grey[500]),
+                        Icon(
+                          Icons.location_on,
+                          size: 12,
+                          color: Colors.grey[500],
+                        ),
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(
-                            v['address'] as String? ?? '',
+                            v['address']?.toString() ?? '',
                             style: TextStyle(
-                                color: Colors.grey[500], fontSize: 11),
+                              color: Colors.grey[500],
+                              fontSize: 11,
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -533,32 +548,38 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.access_time,
-                            size: 12, color: Color(0xFF4CAF50)),
+                        const Icon(
+                          Icons.access_time,
+                          size: 12,
+                          color: Color(0xFF4CAF50),
+                        ),
                         const SizedBox(width: 3),
                         Text(
                           hours,
                           style: const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF4CAF50),
-                              fontWeight: FontWeight.w500),
+                            fontSize: 11,
+                            color: Color(0xFF4CAF50),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.star_rounded,
-                            size: 12, color: Color(0xFFF59E0B)),
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 12,
+                          color: Color(0xFFF59E0B),
+                        ),
                         const SizedBox(width: 3),
                         Text(
-                          hasRating
-                              ? avgRating.toStringAsFixed(1)
-                              : 'Chưa có',
+                          hasRating ? avgRating.toStringAsFixed(1) : 'Chưa có',
                           style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A237E)),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A237E),
+                          ),
                         ),
                         if (hasRating) ...[
                           const SizedBox(width: 3),
@@ -572,13 +593,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         ],
                         if (distLabel.isNotEmpty) ...[
                           const SizedBox(width: 10),
-                          Icon(Icons.near_me,
-                              size: 12, color: Colors.grey[400]),
+                          Icon(
+                            Icons.near_me,
+                            size: 12,
+                            color: Colors.grey[400],
+                          ),
                           const SizedBox(width: 3),
-                          Text(distLabel,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey[500])),
+                          Text(
+                            distLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[500],
+                            ),
+                          ),
                         ],
                       ],
                     ),
@@ -588,11 +615,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
             Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: Icon(Icons.chevron_right,
-                  color: isSelected
-                      ? const Color(0xFF4CAF50)
-                      : Colors.grey[400],
-                  size: 22),
+              child: Icon(
+                Icons.chevron_right,
+                color: isSelected ? const Color(0xFF4CAF50) : Colors.grey[400],
+                size: 22,
+              ),
             ),
           ],
         ),

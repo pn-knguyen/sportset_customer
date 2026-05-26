@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/momo_service.dart';
+import '../../utils/route_arguments.dart';
+import '../../utils/safe_values.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
   const BookingConfirmationScreen({super.key});
@@ -32,25 +34,27 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     }
     _didInitFromArgs = true;
 
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    if (args == null) {
+    final args = routeArguments(context);
+    if (args.isEmpty) {
       return;
     }
 
     final incomingCourt = args['court'];
-    if (incomingCourt is Map) {
-      _court = Map<String, dynamic>.from(incomingCourt);
+    final incomingCourtMap = stringKeyedMap(incomingCourt);
+    if (incomingCourtMap != null) {
+      _court = incomingCourtMap;
     }
 
     final incomingDate = args['selectedDate'];
-    if (incomingDate is Map) {
-      _selectedDate = Map<String, dynamic>.from(incomingDate);
+    final incomingDateMap = stringKeyedMap(incomingDate);
+    if (incomingDateMap != null) {
+      _selectedDate = incomingDateMap;
     }
 
     final incomingSlot = args['selectedSlot'];
-    if (incomingSlot is Map) {
-      _selectedSlot = Map<String, dynamic>.from(incomingSlot);
+    final incomingSlotMap = stringKeyedMap(incomingSlot);
+    if (incomingSlotMap != null) {
+      _selectedSlot = incomingSlotMap;
     }
 
     _selectedSubCourt = args['selectedSubCourt']?.toString();
@@ -138,8 +142,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       return 0;
     }
 
-    final discountType = voucher['discountType']?.toString().toLowerCase() ?? '';
-    final discountValue = (voucher['discountValue'] as num?)?.toDouble() ?? 0;
+    final discountType =
+        voucher['discountType']?.toString().toLowerCase() ?? '';
+    final discountValue = toNullableDouble(voucher['discountValue']) ?? 0;
 
     if (discountType == 'percent') {
       final amount = (_totalPrice * discountValue / 100).round();
@@ -175,8 +180,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       return '';
     }
     final code = voucher['code']?.toString() ?? '';
-    final discountType = voucher['discountType']?.toString().toLowerCase() ?? '';
-    final discountValue = (voucher['discountValue'] as num?)?.toDouble() ?? 0;
+    final discountType =
+        voucher['discountType']?.toString().toLowerCase() ?? '';
+    final discountValue = toNullableDouble(voucher['discountValue']) ?? 0;
     final discountText = discountType == 'percent'
         ? 'Giảm ${discountValue.toStringAsFixed(discountValue % 1 == 0 ? 0 : 1)}%'
         : 'Giảm ${_formatCurrency(discountValue.round())}';
@@ -201,9 +207,10 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       return;
     }
 
-    if (result is Map) {
+    final voucher = stringKeyedMap(result);
+    if (voucher != null) {
       setState(() {
-        _selectedVoucher = Map<String, dynamic>.from(result);
+        _selectedVoucher = voucher;
       });
       return;
     }
@@ -359,7 +366,8 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       if (e is Exception) {
         final msg = e.toString();
         if (msg.contains('voucher_already_used_by_user')) {
-          errorMsg = 'Bạn đã sử dụng voucher này rồi. Mỗi người chỉ dùng được một lần.';
+          errorMsg =
+              'Bạn đã sử dụng voucher này rồi. Mỗi người chỉ dùng được một lần.';
         } else if (msg.contains('voucher_out_of_quantity')) {
           errorMsg = 'Voucher đã hết lượt sử dụng. Vui lòng chọn voucher khác.';
         } else if (msg.contains('voucher_not_found')) {
@@ -437,14 +445,14 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
     await firestore.runTransaction((transaction) async {
       if (selectedVoucherId.isNotEmpty) {
-        final voucherRef =
-            firestore.collection('vouchers').doc(selectedVoucherId);
+        final voucherRef = firestore
+            .collection('vouchers')
+            .doc(selectedVoucherId);
         final voucherSnapshot = await transaction.get(voucherRef);
 
         if (!voucherSnapshot.exists) throw Exception('voucher_not_found');
 
-        final voucherData =
-            voucherSnapshot.data() ?? <String, dynamic>{};
+        final voucherData = voucherSnapshot.data() ?? <String, dynamic>{};
         final totalQuantity = _toInt(voucherData['totalQuantity']);
         final usedQuantity = _toInt(voucherData['usedQuantity']);
 
@@ -473,37 +481,37 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
           ),
         ),
         child: Stack(
-        children: [
-          Positioned.fill(
-            child: Column(
-              children: [
-                const SizedBox(height: 100),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildFieldInfoCard(),
-                          const SizedBox(height: 24),
-                          _buildPaymentMethodSection(),
-                          const SizedBox(height: 24),
-                          _buildVoucherSection(),
-                          const SizedBox(height: 24),
-                          _buildPaymentDetailsSection(),
-                        ],
+          children: [
+            Positioned.fill(
+              child: Column(
+                children: [
+                  const SizedBox(height: 100),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildFieldInfoCard(),
+                            const SizedBox(height: 24),
+                            _buildPaymentMethodSection(),
+                            const SizedBox(height: 24),
+                            _buildVoucherSection(),
+                            const SizedBox(height: 24),
+                            _buildPaymentDetailsSection(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          _buildFixedHeader(),
-          _buildFixedBottomButton(),
-        ],
-      ),
+            _buildFixedHeader(),
+            _buildFixedBottomButton(),
+          ],
+        ),
       ),
     );
   }
@@ -514,9 +522,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       left: 0,
       right: 0,
       child: Container(
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-        ),
+        decoration: BoxDecoration(color: Colors.transparent),
         child: SafeArea(
           bottom: false,
           child: Padding(
@@ -601,8 +607,11 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 width: 96,
                 height: 96,
                 color: const Color(0xFFC8E6C9),
-                child: const Icon(Icons.sports_soccer,
-                    color: Color(0xFF4CAF50), size: 32),
+                child: const Icon(
+                  Icons.sports_soccer,
+                  color: Color(0xFF4CAF50),
+                  size: 32,
+                ),
               ),
             ),
           ),
@@ -623,8 +632,11 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.location_on,
-                        size: 14, color: Color(0xFF6F7A6B)),
+                    const Icon(
+                      Icons.location_on,
+                      size: 14,
+                      color: Color(0xFF6F7A6B),
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -816,7 +828,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               // ignore: deprecated_member_use
               onChanged: (String? newValue) {
                 setState(() {
-                  _selectedPayment = newValue!;
+                  if (newValue != null) {
+                    _selectedPayment = newValue;
+                  }
                 });
               },
               activeColor: const Color(0xFF4CAF50),
@@ -827,7 +841,11 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     );
   }
 
-  Widget _buildPaymentOptionWithIcon(String value, String label, IconData icon) {
+  Widget _buildPaymentOptionWithIcon(
+    String value,
+    String label,
+    IconData icon,
+  ) {
     return InkWell(
       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
       onTap: () {
@@ -847,11 +865,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
-              child: Icon(
-                icon,
-                color: const Color(0xFF6F7A6B),
-                size: 20,
-              ),
+              child: Icon(icon, color: const Color(0xFF6F7A6B), size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -869,7 +883,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               groupValue: _selectedPayment,
               onChanged: (String? newValue) {
                 setState(() {
-                  _selectedPayment = newValue!;
+                  if (newValue != null) {
+                    _selectedPayment = newValue;
+                  }
                 });
               },
               activeColor: const Color(0xFF4CAF50),
@@ -957,11 +973,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right,
-              color: Color(0xFF6F7A6B),
-              size: 20,
-            ),
+            const Icon(Icons.chevron_right, color: Color(0xFF6F7A6B), size: 20),
           ],
         ),
       ),
@@ -973,7 +985,10 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     final basePrice = slotPrice > 0 ? slotPrice : _totalPrice;
     final discountAmount = _voucherDiscountAmount();
     const serviceFee = 0;
-    final grandTotal = (_totalPrice - discountAmount + serviceFee).clamp(0, _totalPrice + serviceFee);
+    final grandTotal = (_totalPrice - discountAmount + serviceFee).clamp(
+      0,
+      _totalPrice + serviceFee,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -1055,10 +1070,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF6B7280),
-          ),
+          style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
         ),
         Text(
           price,
@@ -1131,14 +1143,18 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.5,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white),
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.verified_user,
-                                    color: Colors.white, size: 20),
+                                Icon(
+                                  Icons.verified_user,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 SizedBox(width: 8),
                                 Text(
                                   'Thanh toán ngay',
@@ -1159,8 +1175,11 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
-                      Icon(Icons.info_outline,
-                          size: 14, color: Color(0xFF6F7A6B)),
+                      Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: Color(0xFF6F7A6B),
+                      ),
                       SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -1183,4 +1202,3 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     );
   }
 }
-

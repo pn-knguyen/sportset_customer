@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/route_arguments.dart';
 
 class VenueDetailScreen extends StatefulWidget {
   const VenueDetailScreen({super.key});
@@ -59,18 +60,72 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   String _normalizeText(String input) {
     final lower = input.toLowerCase().trim();
     const replacements = {
-      'à': 'a', 'á': 'a', 'ạ': 'a', 'ả': 'a', 'ã': 'a',
-      'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ậ': 'a', 'ẩ': 'a', 'ẫ': 'a',
-      'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ặ': 'a', 'ẳ': 'a', 'ẵ': 'a',
-      'è': 'e', 'é': 'e', 'ẹ': 'e', 'ẻ': 'e', 'ẽ': 'e',
-      'ê': 'e', 'ề': 'e', 'ế': 'e', 'ệ': 'e', 'ể': 'e', 'ễ': 'e',
-      'ì': 'i', 'í': 'i', 'ị': 'i', 'ỉ': 'i', 'ĩ': 'i',
-      'ò': 'o', 'ó': 'o', 'ọ': 'o', 'ỏ': 'o', 'õ': 'o',
-      'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ộ': 'o', 'ổ': 'o', 'ỗ': 'o',
-      'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ợ': 'o', 'ở': 'o', 'ỡ': 'o',
-      'ù': 'u', 'ú': 'u', 'ụ': 'u', 'ủ': 'u', 'ũ': 'u',
-      'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ự': 'u', 'ử': 'u', 'ữ': 'u',
-      'ỳ': 'y', 'ý': 'y', 'ỵ': 'y', 'ỷ': 'y', 'ỹ': 'y',
+      'à': 'a',
+      'á': 'a',
+      'ạ': 'a',
+      'ả': 'a',
+      'ã': 'a',
+      'â': 'a',
+      'ầ': 'a',
+      'ấ': 'a',
+      'ậ': 'a',
+      'ẩ': 'a',
+      'ẫ': 'a',
+      'ă': 'a',
+      'ằ': 'a',
+      'ắ': 'a',
+      'ặ': 'a',
+      'ẳ': 'a',
+      'ẵ': 'a',
+      'è': 'e',
+      'é': 'e',
+      'ẹ': 'e',
+      'ẻ': 'e',
+      'ẽ': 'e',
+      'ê': 'e',
+      'ề': 'e',
+      'ế': 'e',
+      'ệ': 'e',
+      'ể': 'e',
+      'ễ': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'ị': 'i',
+      'ỉ': 'i',
+      'ĩ': 'i',
+      'ò': 'o',
+      'ó': 'o',
+      'ọ': 'o',
+      'ỏ': 'o',
+      'õ': 'o',
+      'ô': 'o',
+      'ồ': 'o',
+      'ố': 'o',
+      'ộ': 'o',
+      'ổ': 'o',
+      'ỗ': 'o',
+      'ơ': 'o',
+      'ờ': 'o',
+      'ớ': 'o',
+      'ợ': 'o',
+      'ở': 'o',
+      'ỡ': 'o',
+      'ù': 'u',
+      'ú': 'u',
+      'ụ': 'u',
+      'ủ': 'u',
+      'ũ': 'u',
+      'ư': 'u',
+      'ừ': 'u',
+      'ứ': 'u',
+      'ự': 'u',
+      'ử': 'u',
+      'ữ': 'u',
+      'ỳ': 'y',
+      'ý': 'y',
+      'ỵ': 'y',
+      'ỷ': 'y',
+      'ỹ': 'y',
       'đ': 'd',
     };
     final buffer = StringBuffer();
@@ -84,15 +139,26 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   IconData _amenityIconFor(String label) {
     final n = _normalizeText(label);
     if (n.contains('wifi') || n.contains('wi-fi')) return Icons.wifi;
-    if (n.contains('gui xe') || n.contains('bai xe') || n.contains('parking')) return Icons.local_parking;
-    if (n.contains('nuoc') || n.contains('giai khat') || n.contains('drink')) return Icons.local_drink;
+    if (n.contains('gui xe') || n.contains('bai xe') || n.contains('parking'))
+      return Icons.local_parking;
+    if (n.contains('nuoc') || n.contains('giai khat') || n.contains('drink'))
+      return Icons.local_drink;
     if (n.contains('tam') || n.contains('shower')) return Icons.shower;
     if (n.contains('thay do') || n.contains('locker')) return Icons.checkroom;
-    if (n.contains('ve sinh') || n.contains('wc') || n.contains('toilet')) return Icons.wc;
+    if (n.contains('ve sinh') || n.contains('wc') || n.contains('toilet'))
+      return Icons.wc;
     if (n.contains('den') || n.contains('lighting')) return Icons.lightbulb;
-    if (n.contains('huan luyen') || n.contains('coach') || n.contains('trong tai')) return Icons.groups;
-    if (n.contains('dung cu') || n.contains('vot') || n.contains('bong') || n.contains('thue')) return Icons.sports;
-    if (n.contains('bao ho') || n.contains('y te')) return Icons.health_and_safety;
+    if (n.contains('huan luyen') ||
+        n.contains('coach') ||
+        n.contains('trong tai'))
+      return Icons.groups;
+    if (n.contains('dung cu') ||
+        n.contains('vot') ||
+        n.contains('bong') ||
+        n.contains('thue'))
+      return Icons.sports;
+    if (n.contains('bao ho') || n.contains('y te'))
+      return Icons.health_and_safety;
     return Icons.check_circle;
   }
 
@@ -110,19 +176,28 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
 
   IconData _sportIcon(String sportType) {
     final s = sportType.toLowerCase();
-    if (s.contains('bóng đá') || s.contains('bong da') || s.contains('football') || s.contains('soccer')) {
+    if (s.contains('bóng đá') ||
+        s.contains('bong da') ||
+        s.contains('football') ||
+        s.contains('soccer')) {
       return Icons.sports_soccer;
     }
-    if (s.contains('cầu lông') || s.contains('cau long') || s.contains('badminton')) {
+    if (s.contains('cầu lông') ||
+        s.contains('cau long') ||
+        s.contains('badminton')) {
       return Icons.sports_tennis;
     }
-    if (s.contains('bóng rổ') || s.contains('bong ro') || s.contains('basketball')) {
+    if (s.contains('bóng rổ') ||
+        s.contains('bong ro') ||
+        s.contains('basketball')) {
       return Icons.sports_basketball;
     }
     if (s.contains('tennis')) {
       return Icons.sports_tennis;
     }
-    if (s.contains('bóng chuyền') || s.contains('bong chuyen') || s.contains('volleyball')) {
+    if (s.contains('bóng chuyền') ||
+        s.contains('bong chuyen') ||
+        s.contains('volleyball')) {
       return Icons.sports_volleyball;
     }
     if (s.contains('bơi') || s.contains('swimming') || s.contains('pool')) {
@@ -138,7 +213,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final venueId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+    final venueId = routeStringArgument(context) ?? '';
 
     return Scaffold(
       backgroundColor: const Color(0xFFE8F5E9),
@@ -155,7 +230,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
 
           final venueData = venueSnap.data?.data() ?? {};
           final name = venueData['name']?.toString() ?? 'Cơ sở thể thao';
-          final imageUrl = venueData['imageUrl']?.toString() ??
+          final imageUrl =
+              venueData['imageUrl']?.toString() ??
               venueData['image']?.toString() ??
               _fallbackImage;
           final address =
@@ -272,8 +348,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       ],
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.chevron_left,
-                          color: Color(0xFF1A237E)),
+                      icon: const Icon(
+                        Icons.chevron_left,
+                        color: Color(0xFF1A237E),
+                      ),
                       onPressed: () => Navigator.pop(context),
                       padding: EdgeInsets.zero,
                     ),
@@ -299,8 +377,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     required String description,
     required List<Map<String, dynamic>> amenities,
   }) {
-    final hours =
-        openTime.isNotEmpty && closeTime.isNotEmpty ? '$openTime - $closeTime' : 'Liên hệ';
+    final hours = openTime.isNotEmpty && closeTime.isNotEmpty
+        ? '$openTime - $closeTime'
+        : 'Liên hệ';
 
     return Container(
       margin: const EdgeInsets.only(top: 0),
@@ -328,8 +407,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
               ),
               if (rating > 0)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
@@ -337,7 +418,11 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.star, color: Color(0xFF4CAF50), size: 14),
+                      const Icon(
+                        Icons.star,
+                        color: Color(0xFF4CAF50),
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         rating.toStringAsFixed(1),
@@ -419,8 +504,14 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
               runSpacing: 8,
               children: amenities.map((amenity) {
                 return Container(
-                  constraints: const BoxConstraints(minHeight: 34, minWidth: 96),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  constraints: const BoxConstraints(
+                    minHeight: 34,
+                    minWidth: 96,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -520,7 +611,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         Text(
                           'Cơ sở chưa có sân nào',
                           style: TextStyle(
-                              fontSize: 14, color: Colors.grey[500]),
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
                         ),
                       ],
                     ),
@@ -549,7 +642,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     final sportType = court['sportType']?.toString() ?? '';
     final status = court['status']?.toString() ?? '';
     final price = _priceLabel(court['pricePerHour'] ?? court['price']);
-    final imageUrl = court['imageUrl']?.toString() ??
+    final imageUrl =
+        court['imageUrl']?.toString() ??
         court['image']?.toString() ??
         _fallbackImage;
     final rating = _toDouble(court['rating']);
@@ -592,8 +686,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                   width: 100,
                   height: 110,
                   color: Colors.grey[200],
-                  child:
-                      const Icon(Icons.image, color: Colors.grey, size: 28),
+                  child: const Icon(Icons.image, color: Colors.grey, size: 28),
                 ),
               ),
             ),
@@ -618,13 +711,18 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(_sportIcon(sportType),
-                              size: 13, color: Colors.grey[500]),
+                          Icon(
+                            _sportIcon(sportType),
+                            size: 13,
+                            color: Colors.grey[500],
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             sportType,
                             style: TextStyle(
-                                fontSize: 12, color: Colors.grey[600]),
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
                         ],
                       ),
@@ -635,9 +733,13 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         // Price
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
+                            color: const Color(
+                              0xFF4CAF50,
+                            ).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -653,7 +755,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         // Status badge
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: statusColor.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
@@ -673,8 +777,11 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(Icons.star,
-                              size: 12, color: Color(0xFF4CAF50)),
+                          const Icon(
+                            Icons.star,
+                            size: 12,
+                            color: Color(0xFF4CAF50),
+                          ),
                           const SizedBox(width: 3),
                           Text(
                             rating.toStringAsFixed(1),
@@ -694,8 +801,11 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
             // Arrow
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: Icon(Icons.chevron_right,
-                  color: Colors.grey[400], size: 20),
+              child: Icon(
+                Icons.chevron_right,
+                color: Colors.grey[400],
+                size: 20,
+              ),
             ),
           ],
         ),

@@ -1,9 +1,10 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
+import '../../utils/route_arguments.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({super.key});
@@ -13,8 +14,10 @@ class OtpVerificationScreen extends StatefulWidget {
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _controllers = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   bool _isVerifying = false;
@@ -27,7 +30,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _email = (ModalRoute.of(context)?.settings.arguments as String?) ?? '';
+    _email = routeStringArgument(context) ?? '';
     if (_countdown == 0) _startCountdown();
   }
 
@@ -55,8 +58,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
   }
 
-  String get _enteredOtp =>
-      _controllers.map((c) => c.text).join();
+  String get _enteredOtp => _controllers.map((c) => c.text).join();
 
   void _onChanged(String value, int index) {
     if (value.isNotEmpty && index < 5) {
@@ -75,19 +77,25 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       setState(() => _errorMessage = 'Vui lòng nhập đủ 6 chữ số');
       return;
     }
-    setState(() { _isVerifying = true; _errorMessage = null; });
+    setState(() {
+      _isVerifying = true;
+      _errorMessage = null;
+    });
     try {
       final doc = await FirebaseFirestore.instance
           .collection('password_reset_otps')
           .doc(_email)
           .get();
+      if (!mounted) return;
       if (!doc.exists) {
         setState(() => _errorMessage = 'Mã OTP không hợp lệ hoặc đã hết hạn');
         return;
       }
-      final data = doc.data()!;
-      final storedOtp = data['otp'] as String? ?? '';
-      final expiresAt = data['expiresAt'] as Timestamp?;
+      final data = doc.data() ?? <String, dynamic>{};
+      final storedOtp = data['otp']?.toString() ?? '';
+      final expiresAt = data['expiresAt'] is Timestamp
+          ? data['expiresAt'] as Timestamp
+          : null;
       if (expiresAt != null && expiresAt.toDate().isBefore(DateTime.now())) {
         setState(() => _errorMessage = 'Mã OTP đã hết hạn. Vui lòng gửi lại.');
         return;
@@ -102,9 +110,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           .doc(_email)
           .update({'verified': true});
       if (!mounted) return;
-      Navigator.pushNamed(context, '/reset-password', arguments: {'email': _email});
+      Navigator.pushNamed(
+        context,
+        '/reset-password',
+        arguments: {'email': _email},
+      );
     } catch (_) {
-      setState(() => _errorMessage = 'Đã có lỗi xảy ra. Vui lòng thử lại.');
+      if (mounted) {
+        setState(() => _errorMessage = 'Đã có lỗi xảy ra. Vui lòng thử lại.');
+      }
     } finally {
       if (mounted) setState(() => _isVerifying = false);
     }
@@ -119,13 +133,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           .collection('password_reset_otps')
           .doc(_email)
           .set({
-        'otp': otp,
-        'email': _email,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(
-            DateTime.now().add(const Duration(minutes: 10))),
-        'verified': false,
-      });
+            'otp': otp,
+            'email': _email,
+            'createdAt': FieldValue.serverTimestamp(),
+            'expiresAt': Timestamp.fromDate(
+              DateTime.now().add(const Duration(minutes: 10)),
+            ),
+            'verified': false,
+          });
       await FirebaseAuth.instance.sendPasswordResetEmail(
         email: _email,
         actionCodeSettings: ActionCodeSettings(
@@ -135,12 +150,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           androidMinimumVersion: '21',
         ),
       );
+      if (!mounted) return;
       for (final c in _controllers) {
         c.clear();
       }
       _focusNodes[0].requestFocus();
       _startCountdown();
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Mã OTP mới đã được gửi đến email của bạn'),
@@ -224,8 +239,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                             // Error message
                             if (_errorMessage != null)
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 child: Text(
                                   _errorMessage!,
                                   textAlign: TextAlign.center,
@@ -261,11 +277,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           shaderCallback: (bounds) => const LinearGradient(
             colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
           ).createShader(bounds),
-          child: const Icon(
-            Icons.sports_soccer,
-            size: 80,
-            color: Colors.white,
-          ),
+          child: const Icon(Icons.sports_soccer, size: 80, color: Colors.white),
         ),
         const SizedBox(height: 10),
         const Text(
@@ -329,7 +341,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         return Container(
           width: 48,
           height: 56,
-          margin: EdgeInsets.symmetric(horizontal: index == 0 || index == 5 ? 0 : 4),
+          margin: EdgeInsets.symmetric(
+            horizontal: index == 0 || index == 5 ? 0 : 4,
+          ),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -337,8 +351,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               color: _errorMessage != null
                   ? const Color(0xFFF44336)
                   : _controllers[index].text.isNotEmpty
-                      ? const Color(0xFF4CAF50)
-                      : const Color(0xFFE2E8F0),
+                  ? const Color(0xFF4CAF50)
+                  : const Color(0xFFE2E8F0),
               width: 2,
             ),
             boxShadow: [
@@ -445,10 +459,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         if (_countdown > 0)
           Text(
             'Gửi lại sau ${_countdown}s',
-            style: const TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 15,
-            ),
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
           )
         else
           GestureDetector(

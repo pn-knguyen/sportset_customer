@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});
@@ -115,9 +115,15 @@ class TermsScreen extends StatelessWidget {
                   'NgÆ°á»i dÃ¹ng cam káº¿t cung cáº¥p thÃ´ng tin chÃ­nh xÃ¡c khi Ä‘Äƒng kÃ½ tÃ i khoáº£n vÃ  chá»‹u trÃ¡ch nhiá»‡m báº£o máº­t thÃ´ng tin Ä‘Äƒng nháº­p cá»§a mÃ¬nh.',
                 ),
                 const SizedBox(height: 8),
-                _buildBullet('KhÃ´ng sá»­ dá»¥ng á»©ng dá»¥ng cho báº¥t ká»³ má»¥c Ä‘Ã­ch báº¥t há»£p phÃ¡p nÃ o.'),
-                _buildBullet('KhÃ´ng gÃ¢y cáº£n trá»Ÿ hoáº·c lÃ m giÃ¡n Ä‘oáº¡n hoáº¡t Ä‘á»™ng cá»§a há»‡ thá»‘ng.'),
-                _buildBullet('TÃ´n trá»ng cÃ¡c quy Ä‘á»‹nh chung táº¡i cÃ¡c sÃ¢n thá»ƒ thao thuá»™c há»‡ thá»‘ng liÃªn káº¿t.'),
+                _buildBullet(
+                  'KhÃ´ng sá»­ dá»¥ng á»©ng dá»¥ng cho báº¥t ká»³ má»¥c Ä‘Ã­ch báº¥t há»£p phÃ¡p nÃ o.',
+                ),
+                _buildBullet(
+                  'KhÃ´ng gÃ¢y cáº£n trá»Ÿ hoáº·c lÃ m giÃ¡n Ä‘oáº¡n hoáº¡t Ä‘á»™ng cá»§a há»‡ thá»‘ng.',
+                ),
+                _buildBullet(
+                  'TÃ´n trá»ng cÃ¡c quy Ä‘á»‹nh chung táº¡i cÃ¡c sÃ¢n thá»ƒ thao thuá»™c há»‡ thá»‘ng liÃªn káº¿t.',
+                ),
               ],
             ),
           ),
@@ -158,9 +164,15 @@ class TermsScreen extends StatelessWidget {
                   'Má»i tháº¯c máº¯c hoáº·c khiáº¿u náº¡i vá» Äiá»u khoáº£n sá»­ dá»¥ng, vui lÃ²ng liÃªn há»‡ vá»›i bá»™ pháº­n há»— trá»£ khÃ¡ch hÃ ng cá»§a chÃºng tÃ´i táº¡i:',
                 ),
                 const SizedBox(height: 12),
-                _buildContactRow(Icons.mail_outline_rounded, 'support@sportset.vn'),
+                _buildContactRow(
+                  Icons.mail_outline_rounded,
+                  'support@sportset.vn',
+                ),
                 const SizedBox(height: 8),
-                _buildContactRow(Icons.call_outlined, '1900 1234 (8:00 - 22:00)'),
+                _buildContactRow(
+                  Icons.call_outlined,
+                  '1900 1234 (8:00 - 22:00)',
+                ),
               ],
             ),
           ),
@@ -214,10 +226,7 @@ class TermsScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.only(left: 2),
-            child: child,
-          ),
+          Padding(padding: const EdgeInsets.only(left: 2), child: child),
         ],
       ),
     );
@@ -307,4 +316,3 @@ class TermsScreen extends StatelessWidget {
     );
   }
 }
-

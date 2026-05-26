@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class EmailVerifiedScreen extends StatelessWidget {
   const EmailVerifiedScreen({super.key});
@@ -53,8 +53,9 @@ class EmailVerifiedScreen extends StatelessWidget {
                                   height: 160,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: const Color(0xFF4CAF50)
-                                        .withValues(alpha: 0.12),
+                                    color: const Color(
+                                      0xFF4CAF50,
+                                    ).withValues(alpha: 0.12),
                                   ),
                                 ),
                                 Container(
@@ -72,8 +73,9 @@ class EmailVerifiedScreen extends StatelessWidget {
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF4CAF50)
-                                            .withValues(alpha: 0.35),
+                                        color: const Color(
+                                          0xFF4CAF50,
+                                        ).withValues(alpha: 0.35),
                                         blurRadius: 30,
                                         offset: const Offset(0, 10),
                                       ),
@@ -140,16 +142,14 @@ class EmailVerifiedScreen extends StatelessWidget {
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFF4CAF50),
-                                  Color(0xFF2E7D32),
-                                ],
+                                colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
                               ),
                               borderRadius: BorderRadius.circular(28),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF4CAF50)
-                                      .withValues(alpha: 0.35),
+                                  color: const Color(
+                                    0xFF4CAF50,
+                                  ).withValues(alpha: 0.35),
                                   blurRadius: 16,
                                   offset: const Offset(0, 6),
                                 ),
@@ -158,7 +158,9 @@ class EmailVerifiedScreen extends StatelessWidget {
                             child: ElevatedButton(
                               onPressed: () {
                                 Navigator.pushReplacementNamed(
-                                    context, '/main');
+                                  context,
+                                  '/main',
+                                );
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.transparent,
@@ -199,4 +201,3 @@ class EmailVerifiedScreen extends StatelessWidget {
     );
   }
 }
-

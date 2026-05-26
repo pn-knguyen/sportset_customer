@@ -14,21 +14,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     {
       'icon': Icons.event_available,
       'title': 'Xác nhận đặt sân thành công',
-      'description': 'Sân Cầu Lông A1 đã được đặt cho bạn vào lúc 18:00 tối nay.',
+      'description':
+          'Sân Cầu Lông A1 đã được đặt cho bạn vào lúc 18:00 tối nay.',
       'time': '5 phút trước',
       'isUnread': true,
     },
     {
       'icon': Icons.featured_play_list,
       'title': 'Kết quả trận đấu',
-      'description': 'Trận đấu Tennis ngày 15/10 đã được cập nhật kết quả. Xem ngay!',
+      'description':
+          'Trận đấu Tennis ngày 15/10 đã được cập nhật kết quả. Xem ngay!',
       'time': '1 giờ trước',
       'isUnread': false,
     },
     {
       'icon': Icons.card_giftcard,
       'title': 'Voucher mới tặng bạn',
-      'description': 'Chúc mừng! Bạn nhận được Voucher giảm 20% cho lần đặt sân tiếp theo.',
+      'description':
+          'Chúc mừng! Bạn nhận được Voucher giảm 20% cho lần đặt sân tiếp theo.',
       'time': '3 giờ trước',
       'isUnread': true,
     },
@@ -90,9 +93,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildHeader() {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFE8F5E9),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFFE8F5E9)),
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -104,7 +105,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 width: 36,
                 height: 36,
                 child: IconButton(
-                  icon: const Icon(Icons.chevron_left, size: 24, color: Color(0xFF1A237E)),
+                  icon: const Icon(
+                    Icons.chevron_left,
+                    size: 24,
+                    color: Color(0xFF1A237E),
+                  ),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
                 ),
@@ -127,9 +132,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildTabs() {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFE8F5E9),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFFE8F5E9)),
       child: Row(
         children: [
           Expanded(
@@ -146,7 +149,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
-                        color: _selectedTab == 0 ? const Color(0xFF4CAF50) : Colors.transparent,
+                        color: _selectedTab == 0
+                            ? const Color(0xFF4CAF50)
+                            : Colors.transparent,
                         width: 3,
                       ),
                     ),
@@ -157,7 +162,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: _selectedTab == 0 ? const Color(0xFF1A237E) : Colors.grey[400],
+                      color: _selectedTab == 0
+                          ? const Color(0xFF1A237E)
+                          : Colors.grey[400],
                     ),
                   ),
                 ),
@@ -178,7 +185,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
-                        color: _selectedTab == 1 ? const Color(0xFF4CAF50) : Colors.transparent,
+                        color: _selectedTab == 1
+                            ? const Color(0xFF4CAF50)
+                            : Colors.transparent,
                         width: 3,
                       ),
                     ),
@@ -188,8 +197,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.w500,
-                      color: _selectedTab == 1 ? const Color(0xFF1A237E) : Colors.grey[400],
+                      fontWeight: _selectedTab == 1
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      color: _selectedTab == 1
+                          ? const Color(0xFF1A237E)
+                          : Colors.grey[400],
                     ),
                   ),
                 ),
@@ -203,13 +216,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildNotificationCard(Map<String, dynamic> notification) {
     final isUnread = notification['isUnread'] as bool;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: isUnread ? Colors.white : Colors.white.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isUnread ? const Color(0xFFFFE0B2).withValues(alpha: 0.3) : Colors.transparent,
+          color: isUnread
+              ? const Color(0xFFFFE0B2).withValues(alpha: 0.3)
+              : Colors.transparent,
         ),
         boxShadow: [
           BoxShadow(

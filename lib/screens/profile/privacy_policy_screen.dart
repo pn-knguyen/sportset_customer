@@ -111,18 +111,22 @@ class PrivacyPolicyScreen extends StatelessWidget {
           // Section 2
           _buildSectionTitle('2. MỤC ĐÍCH SỬ DỤNG DỮ LIỆU'),
           const SizedBox(height: 10),
-          _buildParagraph('Thông tin được thu thập sẽ được sử dụng vào các mục đích sau:'),
+          _buildParagraph(
+            'Thông tin được thu thập sẽ được sử dụng vào các mục đích sau:',
+          ),
           const SizedBox(height: 12),
           _buildInfoCard(
             icon: Icons.verified_user_rounded,
             title: 'XÁC THỰC TÀI KHOẢN',
-            body: 'Đảm bảo an toàn cho các giao dịch và quyền truy cập của chủ sân.',
+            body:
+                'Đảm bảo an toàn cho các giao dịch và quyền truy cập của chủ sân.',
           ),
           const SizedBox(height: 10),
           _buildInfoCard(
             icon: Icons.bar_chart_rounded,
             title: 'TỐI ƯU HÓA DOANH THU',
-            body: 'Phân tích xu hướng đặt sân để đề xuất các giải pháp kinh doanh hiệu quả.',
+            body:
+                'Phân tích xu hướng đặt sân để đề xuất các giải pháp kinh doanh hiệu quả.',
           ),
           const SizedBox(height: 24),
 
@@ -264,9 +268,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: const BoxDecoration(
         color: Color(0xFFE8F5E9),
-        border: Border(
-          left: BorderSide(color: Color(0xFF4CAF50), width: 4),
-        ),
+        border: Border(left: BorderSide(color: Color(0xFF4CAF50), width: 4)),
         borderRadius: BorderRadius.only(
           topRight: Radius.circular(12),
           bottomRight: Radius.circular(12),

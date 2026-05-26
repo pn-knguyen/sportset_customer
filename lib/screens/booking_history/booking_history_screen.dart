@@ -1,7 +1,8 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../../utils/route_arguments.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
   const BookingHistoryScreen({super.key});
@@ -37,101 +38,98 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           ),
         ),
         child: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _bookingsStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF4CAF50),
-                    ),
-                  );
-                }
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _bookingsStream,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF4CAF50),
+                      ),
+                    );
+                  }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'Không tải được lịch đặt. Vui lòng thử lại sau.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.red.shade400,
-                          fontWeight: FontWeight.w600,
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          'Không tải được lịch đặt. Vui lòng thử lại sau.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.red.shade400,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }
-
-                final bookings = (snapshot.data?.docs ?? [])
-                    .map(_mapBooking)
-                    .toList()
-                  ..sort((a, b) {
-                    final aTime = (a['dateTime'] as DateTime?);
-                    final bTime = (b['dateTime'] as DateTime?);
-                    if (aTime == null && bTime == null) return 0;
-                    if (aTime == null) return 1;
-                    if (bTime == null) return -1;
-                    return bTime.compareTo(aTime);
-                  });
-
-                final upcomingBookings = bookings
-                    .where(_isUpcomingBooking)
-                    .toList();
-                final historyBookings = bookings
-                    .where((booking) => !_isUpcomingBooking(booking))
-                    .toList();
-
-                final tabBookings = _selectedTab == 0
-                    ? upcomingBookings
-                    : historyBookings;
-
-                if (tabBookings.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 16,
-                    bottom: 0,
-                  ),
-                  itemCount: tabBookings.length,
-                  itemBuilder: (context, index) {
-                    final booking = tabBookings[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _selectedTab == 0
-                          ? _buildUpcomingBookingCard(booking)
-                          : _buildHistoryBookingCard(booking),
                     );
-                  },
-                );
-              },
+                  }
+
+                  final bookings =
+                      (snapshot.data?.docs ?? []).map(_mapBooking).toList()
+                        ..sort((a, b) {
+                          final aTime = (a['dateTime'] as DateTime?);
+                          final bTime = (b['dateTime'] as DateTime?);
+                          if (aTime == null && bTime == null) return 0;
+                          if (aTime == null) return 1;
+                          if (bTime == null) return -1;
+                          return bTime.compareTo(aTime);
+                        });
+
+                  final upcomingBookings = bookings
+                      .where(_isUpcomingBooking)
+                      .toList();
+                  final historyBookings = bookings
+                      .where((booking) => !_isUpcomingBooking(booking))
+                      .toList();
+
+                  final tabBookings = _selectedTab == 0
+                      ? upcomingBookings
+                      : historyBookings;
+
+                  if (tabBookings.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 16,
+                      bottom: 0,
+                    ),
+                    itemCount: tabBookings.length,
+                    itemBuilder: (context, index) {
+                      final booking = tabBookings[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _selectedTab == 0
+                            ? _buildUpcomingBookingCard(booking)
+                            : _buildHistoryBookingCard(booking),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
   }
 
-  Map<String, dynamic> _mapBooking(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  Map<String, dynamic> _mapBooking(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final data = doc.data();
     final selectedDateRaw = data['selectedDate'];
     final selectedSlotRaw = data['selectedSlot'];
-    final selectedDate = selectedDateRaw is Map
-        ? Map<String, dynamic>.from(selectedDateRaw)
-        : <String, dynamic>{};
-    final selectedSlot = selectedSlotRaw is Map
-        ? Map<String, dynamic>.from(selectedSlotRaw)
-        : <String, dynamic>{};
+    final selectedDate = stringKeyedMap(selectedDateRaw) ?? <String, dynamic>{};
+    final selectedSlot = stringKeyedMap(selectedSlotRaw) ?? <String, dynamic>{};
 
     final dateTime = _extractDateTime(selectedDate['dateTime']);
     final statusRaw = _normalizeStatus((data['status'] ?? '').toString());
@@ -148,7 +146,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       'selectedSlot': selectedSlot,
       'subCourtName': (data['subCourtName'] ?? '').toString(),
       'duration': (data['duration'] ?? '').toString(),
-      'paymentMethodLabel': (data['paymentMethodLabel'] ?? 'Chưa chọn').toString(),
+      'paymentMethodLabel': (data['paymentMethodLabel'] ?? 'Chưa chọn')
+          .toString(),
       'time': _buildTimeText(selectedSlot),
       'date': _buildDateText(selectedDate, dateTime),
       'dateTime': dateTime,
@@ -246,7 +245,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       Navigator.pushNamed(
         context,
         '/booking',
-        arguments: {'court': <String, dynamic>{'id': courtId}},
+        arguments: {
+          'court': <String, dynamic>{'id': courtId},
+        },
       );
     }
   }
@@ -389,12 +390,16 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: _selectedTab == 0 ? Colors.white : Colors.transparent,
+                            color: _selectedTab == 0
+                                ? Colors.white
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(9),
                             boxShadow: _selectedTab == 0
                                 ? [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.06),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.06,
+                                      ),
                                       blurRadius: 4,
                                       offset: const Offset(0, 1),
                                     ),
@@ -406,7 +411,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.w600,
+                              fontWeight: _selectedTab == 0
+                                  ? FontWeight.bold
+                                  : FontWeight.w600,
                               color: _selectedTab == 0
                                   ? const Color(0xFF2E7D32)
                                   : const Color(0xFF6F7A6B),
@@ -421,12 +428,16 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: _selectedTab == 1 ? Colors.white : Colors.transparent,
+                            color: _selectedTab == 1
+                                ? Colors.white
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(9),
                             boxShadow: _selectedTab == 1
                                 ? [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.06),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.06,
+                                      ),
                                       blurRadius: 4,
                                       offset: const Offset(0, 1),
                                     ),
@@ -438,7 +449,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.w600,
+                              fontWeight: _selectedTab == 1
+                                  ? FontWeight.bold
+                                  : FontWeight.w600,
                               color: _selectedTab == 1
                                   ? const Color(0xFF2E7D32)
                                   : const Color(0xFF6F7A6B),
@@ -498,7 +511,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: const Color(0xFFC8E6C9),
-                      child: const Icon(Icons.sports_soccer, color: Color(0xFF4CAF50), size: 28),
+                      child: const Icon(
+                        Icons.sports_soccer,
+                        color: Color(0xFF4CAF50),
+                        size: 28,
+                      ),
                     ),
                   ),
                 ),
@@ -524,20 +541,29 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: isPending
                                 ? const Color(0xFFFFF9C4)
-                                : const Color(0xFF94F990).withValues(alpha: 0.5),
+                                : const Color(
+                                    0xFF94F990,
+                                  ).withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            (booking['status'] ?? 'Đã xác nhận').toString().toUpperCase(),
+                            (booking['status'] ?? 'Đã xác nhận')
+                                .toString()
+                                .toUpperCase(),
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.4,
-                              color: isPending ? const Color(0xFF994700) : const Color(0xFF005313),
+                              color: isPending
+                                  ? const Color(0xFF994700)
+                                  : const Color(0xFF005313),
                             ),
                           ),
                         ),
@@ -547,18 +573,29 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     if ((booking['sportType'] ?? '').toString().isNotEmpty)
                       Row(
                         children: [
-                          const Icon(Icons.sports, size: 14, color: Color(0xFF6F7A6B)),
+                          const Icon(
+                            Icons.sports,
+                            size: 14,
+                            color: Color(0xFF6F7A6B),
+                          ),
                           const SizedBox(width: 5),
                           Text(
                             (booking['sportType'] ?? '').toString(),
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF6F7A6B),
+                            ),
                           ),
                         ],
                       ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.calendar_today, size: 14, color: Color(0xFF00696B)),
+                        const Icon(
+                          Icons.calendar_today,
+                          size: 14,
+                          color: Color(0xFF00696B),
+                        ),
                         const SizedBox(width: 5),
                         Text(
                           '${(booking['time'] ?? '')} | ${(booking['date'] ?? '')}',
@@ -579,7 +616,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           Container(
             padding: const EdgeInsets.only(top: 12),
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFE8F5E9), width: 1)),
+              border: Border(
+                top: BorderSide(color: Color(0xFFE8F5E9), width: 1),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -612,9 +651,14 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     GestureDetector(
-                      onTap: () => _navigateToBooking((booking['courtId'] ?? '').toString()),
+                      onTap: () => _navigateToBooking(
+                        (booking['courtId'] ?? '').toString(),
+                      ),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           border: Border.all(color: const Color(0xFF4CAF50)),
                           borderRadius: BorderRadius.circular(12),
@@ -633,7 +677,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     GestureDetector(
                       onTap: () => _showQRBottomSheet(context, booking),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
@@ -643,7 +690,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFF4CAF50,
+                              ).withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -668,6 +717,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       ),
     );
   }
+
   void _showQRBottomSheet(BuildContext context, Map<String, dynamic> booking) {
     final bookingId = (booking['id'] ?? '').toString();
     final name = (booking['name'] ?? 'Sân thể thao').toString();
@@ -715,7 +765,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                       color: const Color(0xFFE8F5E9),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 20, color: Color(0xFF2E7D32)),
+                    child: const Icon(
+                      Icons.close,
+                      size: 20,
+                      color: Color(0xFF2E7D32),
+                    ),
                   ),
                 ),
               ],
@@ -830,19 +884,42 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     child: ColorFiltered(
                       colorFilter: isCancelled
                           ? const ColorFilter.matrix(<double>[
-                              0.2126, 0.7152, 0.0722, 0, 0,
-                              0.2126, 0.7152, 0.0722, 0, 0,
-                              0.2126, 0.7152, 0.0722, 0, 0,
-                              0, 0, 0, 1, 0,
+                              0.2126,
+                              0.7152,
+                              0.0722,
+                              0,
+                              0,
+                              0.2126,
+                              0.7152,
+                              0.0722,
+                              0,
+                              0,
+                              0.2126,
+                              0.7152,
+                              0.0722,
+                              0,
+                              0,
+                              0,
+                              0,
+                              0,
+                              1,
+                              0,
                             ])
-                          : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
+                          : const ColorFilter.mode(
+                              Colors.transparent,
+                              BlendMode.multiply,
+                            ),
                       child: Image.network(
                         booking['image'] ?? '',
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Container(
                           color: const Color(0xFFE8F5E9),
                           alignment: Alignment.center,
-                          child: const Icon(Icons.sports_tennis, color: Color(0xFF4CAF50), size: 28),
+                          child: const Icon(
+                            Icons.sports_tennis,
+                            color: Color(0xFF4CAF50),
+                            size: 28,
+                          ),
                         ),
                       ),
                     ),
@@ -870,11 +947,18 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: isCancelled
-                                  ? const Color(0xFFBA1A1A).withValues(alpha: 0.1)
-                                  : const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                                  ? const Color(
+                                      0xFFBA1A1A,
+                                    ).withValues(alpha: 0.1)
+                                  : const Color(
+                                      0xFF4CAF50,
+                                    ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -893,19 +977,33 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(Icons.schedule_outlined, size: 13, color: Color(0xFF6F7A6B)),
+                          const Icon(
+                            Icons.schedule_outlined,
+                            size: 13,
+                            color: Color(0xFF6F7A6B),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             (booking['time'] ?? '').toString(),
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF6F7A6B),
+                            ),
                           ),
                           const SizedBox(width: 8),
-                          const Icon(Icons.calendar_today_outlined, size: 13, color: Color(0xFF6F7A6B)),
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 13,
+                            color: Color(0xFF6F7A6B),
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               (booking['date'] ?? '').toString(),
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF6F7A6B)),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF6F7A6B),
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -954,7 +1052,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                     }
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       gradient: (!hasReview && !isCancelled)
                           ? const LinearGradient(

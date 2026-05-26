@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class IntroScreen extends StatefulWidget {
@@ -79,8 +79,9 @@ class _IntroScreenState extends State<IntroScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: const Color(0xFF2E7D32)
-                                        .withValues(alpha: 0.1),
+                                    color: const Color(
+                                      0xFF2E7D32,
+                                    ).withValues(alpha: 0.1),
                                     width: 1,
                                   ),
                                 ),
@@ -92,8 +93,9 @@ class _IntroScreenState extends State<IntroScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: const Color(0xFF4CAF50)
-                                        .withValues(alpha: 0.2),
+                                    color: const Color(
+                                      0xFF4CAF50,
+                                    ).withValues(alpha: 0.2),
                                     width: 1,
                                   ),
                                 ),
@@ -102,13 +104,13 @@ class _IntroScreenState extends State<IntroScreen> {
                               ShaderMask(
                                 shaderCallback: (bounds) =>
                                     const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF4CAF50),
-                                    Color(0xFF2E7D32)
-                                  ],
-                                ).createShader(bounds),
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFF4CAF50),
+                                        Color(0xFF2E7D32),
+                                      ],
+                                    ).createShader(bounds),
                                 child: const Icon(
                                   Icons.sports_soccer,
                                   size: 96,
@@ -178,8 +180,7 @@ class _IntroScreenState extends State<IntroScreen> {
                       children: [
                         // 2-column masonry image grid
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -214,23 +215,20 @@ class _IntroScreenState extends State<IntroScreen> {
 
                         // CTA button
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 24),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Container(
                             width: double.infinity,
                             height: 56,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(28),
                               gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFF4CAF50),
-                                  Color(0xFF2E7D32),
-                                ],
+                                colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF4CAF50)
-                                      .withValues(alpha: 0.3),
+                                  color: const Color(
+                                    0xFF4CAF50,
+                                  ).withValues(alpha: 0.3),
                                   blurRadius: 20,
                                   offset: const Offset(0, 8),
                                 ),
@@ -246,8 +244,7 @@ class _IntroScreenState extends State<IntroScreen> {
                                 ),
                               ),
                               child: const Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
                                     'Khám phá ngay',
@@ -342,8 +339,11 @@ class _SportImageCard extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (_, error, stack) => ColoredBox(
                 color: fallbackColor.withValues(alpha: 0.2),
-                child: Icon(fallbackIcon,
-                    size: height * 0.45, color: fallbackColor),
+                child: Icon(
+                  fallbackIcon,
+                  size: height * 0.45,
+                  color: fallbackColor,
+                ),
               ),
             ),
             // Gradient overlay

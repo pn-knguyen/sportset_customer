@@ -32,7 +32,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => _emailError = 'Email không hợp lệ');
       return;
     }
-    setState(() { _isLoading = true; _emailError = null; });
+    setState(() {
+      _isLoading = true;
+      _emailError = null;
+    });
     try {
       // Check email exists in customers collection
       final snap = await FirebaseFirestore.instance
@@ -40,6 +43,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           .where('email', isEqualTo: email)
           .limit(1)
           .get();
+      if (!mounted) return;
       if (snap.docs.isEmpty) {
         setState(() => _emailError = 'Email này chưa được đăng ký');
         return;
@@ -51,13 +55,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           .collection('password_reset_otps')
           .doc(email)
           .set({
-        'otp': otp,
-        'email': email,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(
-            DateTime.now().add(const Duration(minutes: 10))),
-        'verified': false,
-      });
+            'otp': otp,
+            'email': email,
+            'createdAt': FieldValue.serverTimestamp(),
+            'expiresAt': Timestamp.fromDate(
+              DateTime.now().add(const Duration(minutes: 10)),
+            ),
+            'verified': false,
+          });
       // Send Firebase password reset email (carries the reset link + oobCode)
       await FirebaseAuth.instance.sendPasswordResetEmail(
         email: email,
@@ -71,9 +76,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (!mounted) return;
       Navigator.pushNamed(context, '/otp-verification', arguments: email);
     } on FirebaseAuthException catch (e) {
-      setState(() => _emailError = e.message ?? 'Đã có lỗi xảy ra');
+      if (mounted) {
+        setState(() => _emailError = e.message ?? 'Đã có lỗi xảy ra');
+      }
     } catch (_) {
-      setState(() => _emailError = 'Đã có lỗi xảy ra. Vui lòng thử lại.');
+      if (mounted) {
+        setState(() => _emailError = 'Đã có lỗi xảy ra. Vui lòng thử lại.');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -143,8 +152,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             const SizedBox(height: 20),
                             if (_emailError != null)
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
                                 child: Text(
                                   _emailError!,
                                   textAlign: TextAlign.center,
@@ -179,11 +189,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           shaderCallback: (bounds) => const LinearGradient(
             colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
           ).createShader(bounds),
-          child: const Icon(
-            Icons.sports_soccer,
-            size: 80,
-            color: Colors.white,
-          ),
+          child: const Icon(Icons.sports_soccer, size: 80, color: Colors.white),
         ),
         const SizedBox(height: 10),
         const Text(
@@ -264,10 +270,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 vertical: 16,
               ),
             ),
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 16,
-            ),
+            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 16),
           ),
         ),
         const SizedBox(height: 20),

@@ -76,21 +76,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
+      final user = credential.user;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'missing-user');
+      }
 
-      await credential.user?.updateDisplayName(fullName);
+      await user.updateDisplayName(fullName);
 
       await FirebaseFirestore.instance
           .collection('customers')
-          .doc(credential.user!.uid)
+          .doc(user.uid)
           .set({
-        'uid': credential.user!.uid,
-        'fullName': fullName,
-        'phone': phone,
-        'email': email,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+            'uid': user.uid,
+            'fullName': fullName,
+            'phone': phone,
+            'email': email,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
 
-      await credential.user?.sendEmailVerification();
+      await user.sendEmailVerification();
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/email-verification');
@@ -127,9 +131,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         idToken: googleAuth.idToken,
       );
 
-      final userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
-      final user = userCredential.user!;
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final user = userCredential.user;
+      if (user == null) {
+        _showSnackBar('Đăng nhập Google thất bại. Vui lòng thử lại.');
+        return;
+      }
 
       final docRef = FirebaseFirestore.instance
           .collection('customers')
@@ -150,7 +159,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Navigator.pushReplacementNamed(context, '/main');
     } on FirebaseAuthException catch (e) {
       _showSnackBar(
-          e.message ?? 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+        e.message ?? 'Đăng nhập Google thất bại. Vui lòng thử lại.',
+      );
     } catch (_) {
       _showSnackBar('Đăng nhập Google thất bại. Vui lòng thử lại.');
     } finally {
@@ -171,16 +181,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
 
-      final accessToken = loginResult.accessToken!;
-      final credential =
-          FacebookAuthProvider.credential(accessToken.tokenString);
+      final accessToken = loginResult.accessToken;
+      if (accessToken == null) {
+        _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        return;
+      }
+      final credential = FacebookAuthProvider.credential(
+        accessToken.tokenString,
+      );
 
-      final userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
-      final user = userCredential.user!;
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final user = userCredential.user;
+      if (user == null) {
+        _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        return;
+      }
 
-      final docRef =
-          FirebaseFirestore.instance.collection('customers').doc(user.uid);
+      final docRef = FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid);
       final doc = await docRef.get();
       if (!doc.exists) {
         final userData = await FacebookAuth.instance.getUserData(
@@ -200,7 +221,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Navigator.pushReplacementNamed(context, '/main');
     } on FirebaseAuthException catch (e) {
       _showSnackBar(
-          e.message ?? 'Đăng nhập Facebook thất bại. Vui lòng thử lại.');
+        e.message ?? 'Đăng nhập Facebook thất bại. Vui lòng thử lại.',
+      );
     } catch (_) {
       _showSnackBar('Đăng nhập Facebook thất bại. Vui lòng thử lại.');
     } finally {
@@ -291,11 +313,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           shaderCallback: (bounds) => const LinearGradient(
             colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
           ).createShader(bounds),
-          child: const Icon(
-            Icons.sports_soccer,
-            size: 36,
-            color: Colors.white,
-          ),
+          child: const Icon(Icons.sports_soccer, size: 36, color: Colors.white),
         ),
         const SizedBox(width: 10),
         const Text(
@@ -414,35 +432,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ],
           ),
           child: ElevatedButton(
-              onPressed: _isLoading ? null : _register,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+            onPressed: _isLoading ? null : _register,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                    )
-                  : const Text(
-                      'Đăng ký',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
             ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : const Text(
+                    'Đăng ký',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 
   Widget _buildInputField({
@@ -489,17 +507,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             keyboardType: keyboardType,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFFA0AEC0), fontSize: 14),
+              hintStyle: const TextStyle(
+                color: Color(0xFFA0AEC0),
+                fontSize: 14,
+              ),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
                 vertical: 13,
               ),
             ),
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 15,
-            ),
+            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
           ),
         ),
         if (errorText != null)
@@ -507,10 +525,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: const EdgeInsets.only(left: 16, top: 2),
             child: Text(
               errorText,
-              style: const TextStyle(
-                color: Color(0xFFF44336),
-                fontSize: 11,
-              ),
+              style: const TextStyle(color: Color(0xFFF44336), fontSize: 11),
             ),
           ),
       ],
@@ -562,7 +577,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             obscureText: !isVisible,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFFA0AEC0), fontSize: 14),
+              hintStyle: const TextStyle(
+                color: Color(0xFFA0AEC0),
+                fontSize: 14,
+              ),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
@@ -577,10 +595,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 onPressed: onToggle,
               ),
             ),
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 15,
-            ),
+            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
           ),
         ),
         if (errorText != null)
@@ -588,10 +603,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: const EdgeInsets.only(left: 16, top: 2),
             child: Text(
               errorText,
-              style: const TextStyle(
-                color: Color(0xFFF44336),
-                fontSize: 11,
-              ),
+              style: const TextStyle(color: Color(0xFFF44336), fontSize: 11),
             ),
           ),
       ],
@@ -601,28 +613,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(
-          child: Container(
-            height: 1,
-            color: Colors.grey.shade200,
-          ),
-        ),
+        Expanded(child: Container(height: 1, color: Colors.grey.shade200)),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 12),
           child: Text(
             'Hoặc đăng ký bằng',
-            style: TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 13,
-            ),
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
           ),
         ),
-        Expanded(
-          child: Container(
-            height: 1,
-            color: Colors.grey.shade200,
-          ),
-        ),
+        Expanded(child: Container(height: 1, color: Colors.grey.shade200)),
       ],
     );
   }
@@ -742,10 +741,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: [
         const Text(
           'Đã có tài khoản?',
-          style: TextStyle(
-            color: Color(0xFF64748B),
-            fontSize: 14,
-          ),
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
         ),
         TextButton(
           onPressed: () {
@@ -768,9 +764,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return SizedBox(
       width: 24,
       height: 24,
-      child: CustomPaint(
-        painter: _GoogleLogoPainter(),
-      ),
+      child: CustomPaint(painter: _GoogleLogoPainter()),
     );
   }
 }
@@ -789,24 +783,33 @@ class _GoogleLogoPainter extends CustomPainter {
     final bluePath = Path();
     bluePath.moveTo(22.56 * scaleX, 12.25 * scaleY);
     bluePath.cubicTo(
-      22.56 * scaleX, 11.47 * scaleY,
-      22.49 * scaleX, 10.72 * scaleY,
-      22.36 * scaleX, 10.0 * scaleY,
+      22.56 * scaleX,
+      11.47 * scaleY,
+      22.49 * scaleX,
+      10.72 * scaleY,
+      22.36 * scaleX,
+      10.0 * scaleY,
     );
     bluePath.lineTo(12 * scaleX, 10.0 * scaleY);
     bluePath.lineTo(12 * scaleX, 14.26 * scaleY);
     bluePath.lineTo(17.92 * scaleX, 14.26 * scaleY);
     bluePath.cubicTo(
-      17.66 * scaleX, 15.63 * scaleY,
-      16.88 * scaleX, 16.79 * scaleY,
-      15.71 * scaleX, 17.57 * scaleY,
+      17.66 * scaleX,
+      15.63 * scaleY,
+      16.88 * scaleX,
+      16.79 * scaleY,
+      15.71 * scaleX,
+      17.57 * scaleY,
     );
     bluePath.lineTo(15.71 * scaleX, 20.34 * scaleY);
     bluePath.lineTo(19.28 * scaleX, 20.34 * scaleY);
     bluePath.cubicTo(
-      21.36 * scaleX, 18.42 * scaleY,
-      22.56 * scaleX, 15.6 * scaleY,
-      22.56 * scaleX, 12.25 * scaleY,
+      21.36 * scaleX,
+      18.42 * scaleY,
+      22.56 * scaleX,
+      15.6 * scaleY,
+      22.56 * scaleX,
+      12.25 * scaleY,
     );
     bluePath.close();
     canvas.drawPath(bluePath, paint);
@@ -816,27 +819,39 @@ class _GoogleLogoPainter extends CustomPainter {
     final greenPath = Path();
     greenPath.moveTo(12 * scaleX, 23 * scaleY);
     greenPath.cubicTo(
-      14.97 * scaleX, 23 * scaleY,
-      17.46 * scaleX, 22.02 * scaleY,
-      19.28 * scaleX, 20.34 * scaleY,
+      14.97 * scaleX,
+      23 * scaleY,
+      17.46 * scaleX,
+      22.02 * scaleY,
+      19.28 * scaleX,
+      20.34 * scaleY,
     );
     greenPath.lineTo(15.71 * scaleX, 17.57 * scaleY);
     greenPath.cubicTo(
-      14.73 * scaleX, 18.23 * scaleY,
-      13.48 * scaleX, 18.63 * scaleY,
-      12 * scaleX, 18.63 * scaleY,
+      14.73 * scaleX,
+      18.23 * scaleY,
+      13.48 * scaleX,
+      18.63 * scaleY,
+      12 * scaleX,
+      18.63 * scaleY,
     );
     greenPath.cubicTo(
-      9.14 * scaleX, 18.63 * scaleY,
-      6.71 * scaleX, 16.7 * scaleY,
-      5.84 * scaleX, 14.1 * scaleY,
+      9.14 * scaleX,
+      18.63 * scaleY,
+      6.71 * scaleX,
+      16.7 * scaleY,
+      5.84 * scaleX,
+      14.1 * scaleY,
     );
     greenPath.lineTo(2.18 * scaleX, 14.1 * scaleY);
     greenPath.lineTo(2.18 * scaleX, 16.94 * scaleY);
     greenPath.cubicTo(
-      3.99 * scaleX, 20.53 * scaleY,
-      7.7 * scaleX, 23 * scaleY,
-      12 * scaleX, 23 * scaleY,
+      3.99 * scaleX,
+      20.53 * scaleY,
+      7.7 * scaleX,
+      23 * scaleY,
+      12 * scaleX,
+      23 * scaleY,
     );
     greenPath.close();
     canvas.drawPath(greenPath, paint);
@@ -846,26 +861,38 @@ class _GoogleLogoPainter extends CustomPainter {
     final yellowPath = Path();
     yellowPath.moveTo(5.84 * scaleX, 14.09 * scaleY);
     yellowPath.cubicTo(
-      5.62 * scaleX, 13.43 * scaleY,
-      5.49 * scaleX, 12.73 * scaleY,
-      5.49 * scaleX, 12 * scaleY,
+      5.62 * scaleX,
+      13.43 * scaleY,
+      5.49 * scaleX,
+      12.73 * scaleY,
+      5.49 * scaleX,
+      12 * scaleY,
     );
     yellowPath.cubicTo(
-      5.49 * scaleX, 11.27 * scaleY,
-      5.62 * scaleX, 10.57 * scaleY,
-      5.84 * scaleX, 9.91 * scaleY,
+      5.49 * scaleX,
+      11.27 * scaleY,
+      5.62 * scaleX,
+      10.57 * scaleY,
+      5.84 * scaleX,
+      9.91 * scaleY,
     );
     yellowPath.lineTo(5.84 * scaleX, 7.07 * scaleY);
     yellowPath.lineTo(2.18 * scaleX, 7.07 * scaleY);
     yellowPath.cubicTo(
-      1.43 * scaleX, 8.55 * scaleY,
-      1 * scaleX, 10.22 * scaleY,
-      1 * scaleX, 12 * scaleY,
+      1.43 * scaleX,
+      8.55 * scaleY,
+      1 * scaleX,
+      10.22 * scaleY,
+      1 * scaleX,
+      12 * scaleY,
     );
     yellowPath.cubicTo(
-      1 * scaleX, 13.78 * scaleY,
-      1.43 * scaleX, 15.45 * scaleY,
-      2.18 * scaleX, 16.93 * scaleY,
+      1 * scaleX,
+      13.78 * scaleY,
+      1.43 * scaleX,
+      15.45 * scaleY,
+      2.18 * scaleX,
+      16.93 * scaleY,
     );
     yellowPath.lineTo(5.03 * scaleX, 14.71 * scaleY);
     yellowPath.lineTo(5.84 * scaleX, 14.09 * scaleY);
@@ -877,26 +904,38 @@ class _GoogleLogoPainter extends CustomPainter {
     final redPath = Path();
     redPath.moveTo(12 * scaleX, 5.38 * scaleY);
     redPath.cubicTo(
-      13.62 * scaleX, 5.38 * scaleY,
-      15.06 * scaleX, 5.94 * scaleY,
-      16.21 * scaleX, 7.04 * scaleY,
+      13.62 * scaleX,
+      5.38 * scaleY,
+      15.06 * scaleX,
+      5.94 * scaleY,
+      16.21 * scaleX,
+      7.04 * scaleY,
     );
     redPath.lineTo(19.36 * scaleX, 3.89 * scaleY);
     redPath.cubicTo(
-      17.45 * scaleX, 2.09 * scaleY,
-      14.97 * scaleX, 1 * scaleY,
-      12 * scaleX, 1 * scaleY,
+      17.45 * scaleX,
+      2.09 * scaleY,
+      14.97 * scaleX,
+      1 * scaleY,
+      12 * scaleX,
+      1 * scaleY,
     );
     redPath.cubicTo(
-      7.7 * scaleX, 1 * scaleY,
-      3.99 * scaleX, 3.47 * scaleY,
-      2.18 * scaleX, 7.07 * scaleY,
+      7.7 * scaleX,
+      1 * scaleY,
+      3.99 * scaleX,
+      3.47 * scaleY,
+      2.18 * scaleX,
+      7.07 * scaleY,
     );
     redPath.lineTo(5.84 * scaleX, 9.91 * scaleY);
     redPath.cubicTo(
-      6.71 * scaleX, 7.31 * scaleY,
-      9.14 * scaleX, 5.38 * scaleY,
-      12 * scaleX, 5.38 * scaleY,
+      6.71 * scaleX,
+      7.31 * scaleY,
+      9.14 * scaleX,
+      5.38 * scaleY,
+      12 * scaleX,
+      5.38 * scaleY,
     );
     redPath.close();
     canvas.drawPath(redPath, paint);

@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../utils/route_arguments.dart';
+import '../../utils/safe_values.dart';
 
 class FieldDetailScreen extends StatefulWidget {
   const FieldDetailScreen({super.key});
@@ -86,7 +88,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           'name': court['name']?.toString() ?? '',
           'image': image,
           'address': court['address']?.toString() ?? '',
-          'rating': (court['rating'] as num?)?.toDouble() ?? 0.0,
+          'rating': toNullableDouble(court['rating']) ?? 0.0,
           'price': price,
           'facilityId': court['facilityId']?.toString() ?? '',
           'savedAt': FieldValue.serverTimestamp(),
@@ -106,27 +108,28 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
         .where('fieldId', isEqualTo: courtId)
         .snapshots()
         .listen((snapshot) {
-      final docs = snapshot.docs;
-      final avg = docs.isEmpty
-          ? 0.0
-          : docs.fold<double>(
-                  0,
-                  (acc, d) =>
-                      acc + ((d.data()['rating'] as num?)?.toDouble() ?? 0)) /
-              docs.length;
-      if (mounted) {
-        setState(() {
-          _avgRating = avg;
-          _reviewCount = docs.length;
+          final docs = snapshot.docs;
+          final avg = docs.isEmpty
+              ? 0.0
+              : docs.fold<double>(
+                      0,
+                      (acc, d) =>
+                          acc + (toNullableDouble(d.data()['rating']) ?? 0),
+                    ) /
+                    docs.length;
+          if (mounted) {
+            setState(() {
+              _avgRating = avg;
+              _reviewCount = docs.length;
+            });
+          }
         });
-      }
-    });
   }
 
   Future<void> _fetchDistance(Map<String, dynamic> court) async {
     // Try lat/lng directly on court first, else fetch from parent facility
-    double? lat = (court['latitude'] as num?)?.toDouble();
-    double? lng = (court['longitude'] as num?)?.toDouble();
+    double? lat = toNullableDouble(court['latitude']);
+    double? lng = toNullableDouble(court['longitude']);
 
     if (lat == null || lng == null) {
       final facilityId = court['facilityId']?.toString() ?? '';
@@ -137,8 +140,8 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             .doc(facilityId)
             .get();
         final data = doc.data();
-        lat = (data?['latitude'] as num?)?.toDouble();
-        lng = (data?['longitude'] as num?)?.toDouble();
+        lat = toNullableDouble(data?['latitude']);
+        lng = toNullableDouble(data?['longitude']);
       } catch (_) {
         return;
       }
@@ -156,8 +159,9 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.low),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+        ),
       );
       final km = _distanceKm(pos.latitude, pos.longitude, lat, lng);
       final label = km < 1
@@ -167,19 +171,20 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
     } catch (_) {}
   }
 
-  double _distanceKm(
-      double lat1, double lng1, double lat2, double lng2) {
+  double _distanceKm(double lat1, double lng1, double lat2, double lng2) {
     const r = 6371.0;
     final dLat = (lat2 - lat1) * pi / 180;
     final dLng = (lng2 - lng1) * pi / 180;
     final sinDLat = sin(dLat / 2);
     final sinDLng = sin(dLng / 2);
-    final c = 2 *
-        asin(sqrt(sinDLat * sinDLat +
-            cos(lat1 * pi / 180) *
-                cos(lat2 * pi / 180) *
-                sinDLng *
-                sinDLng));
+    final c =
+        2 *
+        asin(
+          sqrt(
+            sinDLat * sinDLat +
+                cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sinDLng * sinDLng,
+          ),
+        );
     return r * c;
   }
 
@@ -204,32 +209,34 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
         ),
       ),
       child: Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildImageCarousel(images),
-                _buildContent(court),
-                const SizedBox(height: 100),
-              ],
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildImageCarousel(images),
+                  _buildContent(court),
+                  const SizedBox(height: 100),
+                ],
+              ),
             ),
-          ),
-          _buildFloatingHeader(),
-          _buildBottomBar(),
-        ],
+            _buildFloatingHeader(),
+            _buildBottomBar(),
+          ],
+        ),
       ),
-    ));
+    );
   }
 
   Map<String, dynamic> _readCourtData(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is Map<String, dynamic>) {
+    final args = stringKeyedMap(ModalRoute.of(context)?.settings.arguments);
+    if (args != null) {
       final nested = args['court'];
-      if (nested is Map<String, dynamic>) {
-        return nested;
+      final nestedMap = stringKeyedMap(nested);
+      if (nestedMap != null) {
+        return nestedMap;
       }
       return args;
     }
@@ -276,10 +283,12 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
       final amenities = raw
           .map((item) => item?.toString().trim() ?? '')
           .where((item) => item.isNotEmpty)
-          .map((item) => <String, dynamic>{
-                'icon': _amenityIconFor(item),
-                'label': item,
-              })
+          .map(
+            (item) => <String, dynamic>{
+              'icon': _amenityIconFor(item),
+              'label': item,
+            },
+          )
           .toList();
 
       if (amenities.isNotEmpty) {
@@ -506,9 +515,9 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
 
     return raw
         .whereType<Map>()
-        .map((item) => item.map(
-              (key, value) => MapEntry(key.toString(), value),
-            ))
+        .map(
+          (item) => item.map((key, value) => MapEntry(key.toString(), value)),
+        )
         .toList();
   }
 
@@ -586,8 +595,9 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                         ? const Padding(
                             padding: EdgeInsets.all(10),
                             child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.red),
+                              strokeWidth: 2,
+                              color: Colors.red,
+                            ),
                           )
                         : IconButton(
                             icon: Icon(
@@ -628,10 +638,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               }
             },
             itemBuilder: (context, index) {
-              return Image.network(
-                images[index],
-                fit: BoxFit.cover,
-              );
+              return Image.network(images[index], fit: BoxFit.cover);
             },
           ),
           // Gradient overlay at bottom
@@ -656,7 +663,10 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             right: 0,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
@@ -724,9 +734,10 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             if (facilityName.isNotEmpty || sportType.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(
-                [facilityName, sportType]
-                    .where((item) => item.isNotEmpty)
-                    .join(' • '),
+                [
+                  facilityName,
+                  sportType,
+                ].where((item) => item.isNotEmpty).join(' • '),
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey[700],
@@ -737,19 +748,12 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(
-                  Icons.location_on,
-                  size: 14,
-                  color: Colors.grey[500],
-                ),
+                Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     address,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                   ),
                 ),
               ],
@@ -807,13 +811,11 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (reviewLabel.isNotEmpty) ...[                      const SizedBox(width: 2),
+                    if (reviewLabel.isNotEmpty) ...[
+                      const SizedBox(width: 2),
                       Text(
                         reviewLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[500],
-                        ),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                       ),
                     ],
                   ],
@@ -831,22 +833,23 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               ],
             ),
           ),
-          Container(
-            width: 1,
-            height: 40,
-            color: const Color(0xFFC8E6C9),
-          ),
+          Container(width: 1, height: 40, color: const Color(0xFFC8E6C9)),
           Expanded(
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.near_me, color: Color(0xFF4CAF50), size: 18),
+                    const Icon(
+                      Icons.near_me,
+                      color: Color(0xFF4CAF50),
+                      size: 18,
+                    ),
                     const SizedBox(width: 4),
                     _distance == null &&
-                            ((court['latitude'] as num?) != null ||
-                                (court['facilityId']?.toString() ?? '').isNotEmpty)
+                            (toNullableDouble(court['latitude']) != null ||
+                                (court['facilityId']?.toString() ?? '')
+                                    .isNotEmpty)
                         ? const SizedBox(
                             width: 14,
                             height: 14,
@@ -877,11 +880,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               ],
             ),
           ),
-          Container(
-            width: 1,
-            height: 40,
-            color: const Color(0xFFC8E6C9),
-          ),
+          Container(width: 1, height: 40, color: const Color(0xFFC8E6C9)),
           Expanded(
             child: Column(
               children: [
@@ -1045,7 +1044,8 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
   Widget _buildPricingSection(Map<String, dynamic> court) {
     final weekdayPricing = _normalizePricing(court['weekdayPricing']);
     final weekendPricing = _normalizePricing(court['weekendPricing']);
-    final hasDetailPricing = weekdayPricing.isNotEmpty || weekendPricing.isNotEmpty;
+    final hasDetailPricing =
+        weekdayPricing.isNotEmpty || weekendPricing.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1063,7 +1063,11 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           // Weekday header
           Row(
             children: [
-              const Icon(Icons.calendar_month, size: 20, color: Color(0xFF4CAF50)),
+              const Icon(
+                Icons.calendar_month,
+                size: 20,
+                color: Color(0xFF4CAF50),
+              ),
               const SizedBox(width: 8),
               Text(
                 'BẢNG GIÁ NGÀY THƯỜNG',
@@ -1087,7 +1091,11 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
           // Weekend header
           Row(
             children: [
-              const Icon(Icons.event_available, size: 20, color: Color(0xFFBA1A1A)),
+              const Icon(
+                Icons.event_available,
+                size: 20,
+                color: Color(0xFFBA1A1A),
+              ),
               const SizedBox(width: 8),
               Text(
                 'BẢNG GIÁ CUỐI TUẦN',
@@ -1195,7 +1203,10 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: itemBg,
                     borderRadius: BorderRadius.circular(14),
@@ -1292,8 +1303,9 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
             : docs.fold<double>(
                     0,
                     (acc, d) =>
-                        acc + ((d.data()['rating'] as num?)?.toDouble() ?? 0)) /
-                docs.length;
+                        acc + (toNullableDouble(d.data()['rating']) ?? 0),
+                  ) /
+                  docs.length;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1318,8 +1330,11 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                         padding: const EdgeInsets.only(top: 2),
                         child: Row(
                           children: [
-                            const Icon(Icons.star,
-                                size: 14, color: Color(0xFF4CAF50)),
+                            const Icon(
+                              Icons.star,
+                              size: 14,
+                              color: Color(0xFF4CAF50),
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               '${avgRating.toStringAsFixed(1)} (${docs.length} đánh giá)',
@@ -1372,17 +1387,21 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                 final rawImages = data['images'];
                 final images = rawImages is List
                     ? rawImages
-                        .map((e) => e.toString())
-                        .where((e) => e.isNotEmpty)
-                        .toList()
+                          .map((e) => e.toString())
+                          .where((e) => e.isNotEmpty)
+                          .toList()
                     : <String>[];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: _buildReviewCard(
                     name: (data['userName'] ?? 'Ẩn danh').toString(),
                     avatar: (data['userAvatar'] ?? '').toString(),
-                    rating: (data['rating'] as num?)?.toInt() ?? 0,
-                    time: _timeAgo(data['createdAt'] is Timestamp ? data['createdAt'] as Timestamp : null),
+                    rating: toIntValue(data['rating']),
+                    time: _timeAgo(
+                      data['createdAt'] is Timestamp
+                          ? data['createdAt'] as Timestamp
+                          : null,
+                    ),
                     content: (data['review'] ?? '').toString(),
                     images: images,
                     replied: data['replied'] == true,
@@ -1441,11 +1460,15 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                             child: Image.network(
                               avatar,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stack) => Container(
-                                color: const Color(0xFFC8E6C9),
-                                child: const Icon(Icons.person,
-                                    size: 20, color: Color(0xFF4CAF50)),
-                              ),
+                              errorBuilder: (context, error, stack) =>
+                                  Container(
+                                    color: const Color(0xFFC8E6C9),
+                                    child: const Icon(
+                                      Icons.person,
+                                      size: 20,
+                                      color: Color(0xFF4CAF50),
+                                    ),
+                                  ),
                             ),
                           ),
                         )
@@ -1512,7 +1535,7 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
               height: 1.5,
             ),
           ),
-          if (replied && reply != null && reply.isNotEmpty) ...[  
+          if (replied && reply != null && reply.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -1607,19 +1630,14 @@ class _FieldDetailScreenState extends State<FieldDetailScreen> {
                 Navigator.pushNamed(
                   context,
                   '/booking',
-                  arguments: {
-                    'court': _readCourtData(context),
-                  },
+                  arguments: {'court': _readCourtData(context)},
                 );
               },
               borderRadius: BorderRadius.circular(16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [
-                  Icon(
-                    Icons.calendar_month,
-                    color: Colors.white,
-                  ),
+                  Icon(Icons.calendar_month, color: Colors.white),
                   SizedBox(width: 8),
                   Text(
                     'Kiểm tra lịch & Đặt ngay',

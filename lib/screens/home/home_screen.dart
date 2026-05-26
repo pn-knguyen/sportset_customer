@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../utils/safe_values.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -62,39 +63,39 @@ class _HomeScreenState extends State<HomeScreen> {
         .collection('reviews')
         .snapshots()
         .listen((snapshot) {
-      final ratings = <String, List<double>>{};
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final fieldId = data['fieldId']?.toString() ?? '';
-        final r = (data['rating'] as num?)?.toDouble();
-        if (fieldId.isNotEmpty && r != null) {
-          ratings.putIfAbsent(fieldId, () => []).add(r);
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _courtRatings.clear();
-          _courtReviewCounts.clear();
-          for (final entry in ratings.entries) {
-            _courtReviewCounts[entry.key] = entry.value.length;
-            _courtRatings[entry.key] =
-                entry.value.reduce((a, b) => a + b) / entry.value.length;
+          final ratings = <String, List<double>>{};
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final fieldId = data['fieldId']?.toString() ?? '';
+            final r = toNullableDouble(data['rating']);
+            if (fieldId.isNotEmpty && r != null) {
+              ratings.putIfAbsent(fieldId, () => []).add(r);
+            }
+          }
+          if (mounted) {
+            setState(() {
+              _courtRatings.clear();
+              _courtReviewCounts.clear();
+              for (final entry in ratings.entries) {
+                _courtReviewCounts[entry.key] = entry.value.length;
+                _courtRatings[entry.key] =
+                    entry.value.reduce((a, b) => a + b) / entry.value.length;
+              }
+            });
           }
         });
-      }
-    });
   }
 
   Future<void> _loadAllCourts() async {
     try {
-      final snap =
-          await FirebaseFirestore.instance.collection('courts').get();
+      final snap = await FirebaseFirestore.instance.collection('courts').get();
       final courts = snap.docs
           .map((doc) => _courtFromFirestore(doc.data(), docId: doc.id))
           .where((c) {
-        final status = c['status']?.toString() ?? '';
-        return status.isEmpty || status == 'available';
-      }).toList();
+            final status = c['status']?.toString() ?? '';
+            return status.isEmpty || status == 'available';
+          })
+          .toList();
       if (mounted) setState(() => _allCourts = courts);
     } catch (_) {}
   }
@@ -112,14 +113,17 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _suggestions = []);
       return;
     }
-    final results = _allCourts.where((c) {
-      final name = (c['name'] ?? '').toString().toLowerCase();
-      final address = (c['address'] ?? '').toString().toLowerCase();
-      final category = (c['category'] ?? '').toString().toLowerCase();
-      return name.contains(query) ||
-          address.contains(query) ||
-          category.contains(query);
-    }).take(6).toList();
+    final results = _allCourts
+        .where((c) {
+          final name = (c['name'] ?? '').toString().toLowerCase();
+          final address = (c['address'] ?? '').toString().toLowerCase();
+          final category = (c['category'] ?? '').toString().toLowerCase();
+          return name.contains(query) ||
+              address.contains(query) ||
+              category.contains(query);
+        })
+        .take(6)
+        .toList();
     setState(() => _suggestions = results);
     if (results.isEmpty) {
       _removeOverlay();
@@ -165,14 +169,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       Navigator.pushNamed(
                         context,
                         '/field-detail',
-                        arguments: {
-                          'court': court['detailData'] ?? court
-                        },
+                        arguments: {'court': court['detailData'] ?? court},
                       );
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       child: Row(
                         children: [
                           ClipRRect(
@@ -186,8 +190,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 width: 44,
                                 height: 44,
                                 color: Colors.grey[200],
-                                child: const Icon(Icons.sports,
-                                    size: 20, color: Colors.grey),
+                                child: const Icon(
+                                  Icons.sports,
+                                  size: 20,
+                                  color: Colors.grey,
+                                ),
                               ),
                             ),
                           ),
@@ -258,8 +265,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.low),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+        ),
       );
       if (mounted) setState(() => _userPosition = pos);
     } catch (_) {}
@@ -273,8 +281,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final coords = <String, Map<String, double>>{};
       for (final doc in snap.docs) {
         final data = doc.data();
-        final lat = (data['latitude'] as num?)?.toDouble();
-        final lng = (data['longitude'] as num?)?.toDouble();
+        final lat = toNullableDouble(data['latitude']);
+        final lng = toNullableDouble(data['longitude']);
         if (lat != null && lng != null) {
           coords[doc.id] = {'lat': lat, 'lng': lng};
         }
@@ -287,23 +295,28 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_userPosition == null || facilityId == null) return '';
     final coords = _facilityCoords[facilityId];
     if (coords == null) return '';
-    final lat2 = coords['lat']!;
-    final lng2 = coords['lng']!;
+    final lat2 = coords['lat'];
+    final lng2 = coords['lng'];
+    final userPosition = _userPosition;
+    if (lat2 == null || lng2 == null || userPosition == null) return '';
     const r = 6371.0;
-    final dLat = (lat2 - _userPosition!.latitude) * pi / 180;
-    final dLng = (lng2 - _userPosition!.longitude) * pi / 180;
+    final dLat = (lat2 - userPosition.latitude) * pi / 180;
+    final dLng = (lng2 - userPosition.longitude) * pi / 180;
     final sinDLat = sin(dLat / 2);
     final sinDLng = sin(dLng / 2);
-    final c = 2 *
-        asin(sqrt(sinDLat * sinDLat +
-            cos(_userPosition!.latitude * pi / 180) *
-                cos(lat2 * pi / 180) *
-                sinDLng *
-                sinDLng));
+    final c =
+        2 *
+        asin(
+          sqrt(
+            sinDLat * sinDLat +
+                cos(userPosition.latitude * pi / 180) *
+                    cos(lat2 * pi / 180) *
+                    sinDLng *
+                    sinDLng,
+          ),
+        );
     final km = r * c;
-    return km < 1
-        ? '${(km * 1000).round()} m'
-        : '${km.toStringAsFixed(1)} km';
+    return km < 1 ? '${(km * 1000).round()} m' : '${km.toStringAsFixed(1)} km';
   }
 
   Future<void> _loadUserInfo() async {
@@ -318,13 +331,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
     final data = doc.data();
+    final fullName = data?['fullName']?.toString().trim() ?? '';
+    final photoUrl = data?['photoUrl']?.toString().trim() ?? '';
     setState(() {
-      _displayName = (data?['fullName'] as String? ?? '').trim().isNotEmpty
-          ? (data!['fullName'] as String).trim()
+      _displayName = fullName.isNotEmpty
+          ? fullName
           : (user.displayName ?? '').trim();
-      _photoUrl = (data?['photoUrl'] as String? ?? '').trim().isNotEmpty
-          ? (data!['photoUrl'] as String).trim()
-          : (user.photoURL ?? '');
+      _photoUrl = photoUrl.isNotEmpty ? photoUrl : (user.photoURL ?? '');
     });
   }
 
@@ -334,6 +347,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (hour < 18) return 'Chào buổi chiều,';
     return 'Chào buổi tối,';
   }
+
   String _normalizeText(String? value) {
     return (value ?? '').trim().toLowerCase();
   }
@@ -417,8 +431,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     for (final entry in grouped.entries) {
       entry.value.sort((a, b) {
-        final left = (a['rating'] as num?)?.toDouble() ?? 0;
-        final right = (b['rating'] as num?)?.toDouble() ?? 0;
+        final left = toNullableDouble(a['rating']) ?? 0;
+        final right = toNullableDouble(b['rating']) ?? 0;
         return right.compareTo(left);
       });
       if (entry.value.length > 10) {
@@ -442,94 +456,103 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('sports')
-            .where('isVisible', isEqualTo: true)
-            .snapshots(),
-        builder: (context, sportsSnapshot) {
-          if (sportsSnapshot.connectionState == ConnectionState.waiting &&
-              !sportsSnapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          stream: FirebaseFirestore.instance
+              .collection('sports')
+              .where('isVisible', isEqualTo: true)
+              .snapshots(),
+          builder: (context, sportsSnapshot) {
+            if (sportsSnapshot.connectionState == ConnectionState.waiting &&
+                !sportsSnapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (sportsSnapshot.hasError) {
-            return const Center(
-              child: Text('Không thể tải danh mục từ Firebase'),
-            );
-          }
-
-          final categories = _buildVisibleSports(sportsSnapshot.data?.docs ?? []);
-          if (categories.isEmpty) {
-            return const Center(
-              child: Text('Chưa có danh mục thể thao đang hiển thị'),
-            );
-          }
-
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance.collection('courts').snapshots(),
-            builder: (context, courtsSnapshot) {
-              if (courtsSnapshot.connectionState == ConnectionState.waiting &&
-                  !courtsSnapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (courtsSnapshot.hasError) {
-                return const Center(
-                  child: Text('Không thể tải dữ liệu sân từ Firebase'),
-                );
-              }
-
-              final courts = (courtsSnapshot.data?.docs ?? [])
-                  .map((doc) => _courtFromFirestore(doc.data(), docId: doc.id))
-                  .where((court) {
-                    final status = (court['status'] ?? '').toString();
-                    return status.isEmpty || status == 'available';
-                  })
-                  .toList();
-              final suggestedByCategory = _buildSuggestedByCategory(
-                categories: categories,
-                courts: courts,
+            if (sportsSnapshot.hasError) {
+              return const Center(
+                child: Text('Không thể tải danh mục từ Firebase'),
               );
+            }
 
-              final visibleSections = categories
-                  .where((category) =>
-                      (suggestedByCategory[category] ?? <Map<String, dynamic>>[])
-                          .isNotEmpty)
-                  .toList();
+            final categories = _buildVisibleSports(
+              sportsSnapshot.data?.docs ?? [],
+            );
+            if (categories.isEmpty) {
+              return const Center(
+                child: Text('Chưa có danh mục thể thao đang hiển thị'),
+              );
+            }
 
-              return Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          _buildSearchBar(),
-                          _buildBanner(),
-                          if (visibleSections.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 24),
-                              child: Text('Chưa có sân phù hợp với danh mục'),
-                            ),
-                          for (final category in visibleSections)
-                            _buildFieldSection(
-                              category,
-                              suggestedByCategory[category] ??
-                                  <Map<String, dynamic>>[],
-                            ),
-                          const SizedBox(height: 12),
-                        ],
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('courts')
+                  .snapshots(),
+              builder: (context, courtsSnapshot) {
+                if (courtsSnapshot.connectionState == ConnectionState.waiting &&
+                    !courtsSnapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (courtsSnapshot.hasError) {
+                  return const Center(
+                    child: Text('Không thể tải dữ liệu sân từ Firebase'),
+                  );
+                }
+
+                final courts = (courtsSnapshot.data?.docs ?? [])
+                    .map(
+                      (doc) => _courtFromFirestore(doc.data(), docId: doc.id),
+                    )
+                    .where((court) {
+                      final status = (court['status'] ?? '').toString();
+                      return status.isEmpty || status == 'available';
+                    })
+                    .toList();
+                final suggestedByCategory = _buildSuggestedByCategory(
+                  categories: categories,
+                  courts: courts,
+                );
+
+                final visibleSections = categories
+                    .where(
+                      (category) =>
+                          (suggestedByCategory[category] ??
+                                  <Map<String, dynamic>>[])
+                              .isNotEmpty,
+                    )
+                    .toList();
+
+                return Column(
+                  children: [
+                    _buildHeader(),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            _buildSearchBar(),
+                            _buildBanner(),
+                            if (visibleSections.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 24),
+                                child: Text('Chưa có sân phù hợp với danh mục'),
+                              ),
+                            for (final category in visibleSections)
+                              _buildFieldSection(
+                                category,
+                                suggestedByCategory[category] ??
+                                    <Map<String, dynamic>>[],
+                              ),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildHeader() {
@@ -600,57 +623,58 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF4CAF50),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 4,
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF4CAF50),
+                        width: 2,
                       ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: _photoUrl.isNotEmpty
-                        ? Image.network(
-                            _photoUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey.shade300,
-                                child: const Icon(
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: _photoUrl.isNotEmpty
+                          ? Image.network(
+                              _photoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey.shade300,
+                                  child: const Icon(
                                     Icons.person,
-                                    color: Colors.white),
-                              );
-                            },
-                          )
-                        : Container(
-                            color: const Color(0xFF4CAF50),
-                            child: Center(
-                              child: Text(
-                                _displayName.isNotEmpty
-                                    ? _displayName[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                    color: Colors.white,
+                                  ),
+                                );
+                              },
+                            )
+                          : Container(
+                              color: const Color(0xFF4CAF50),
+                              child: Center(
+                                child: Text(
+                                  _displayName.isNotEmpty
+                                      ? _displayName[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           ],
         ),
       ),
@@ -709,10 +733,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     _searchController.clear();
                     _removeOverlay();
                   },
-                  child: Icon(Icons.close,
-                      color: Colors.grey.shade400, size: 18),
+                  child: Icon(
+                    Icons.close,
+                    color: Colors.grey.shade400,
+                    size: 18,
+                  ),
                 )
-              else ...[  Container(
+              else ...[
+                Container(
                   width: 1,
                   height: 20,
                   color: Colors.grey.shade200,
@@ -775,7 +803,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF4CAF50),
                         borderRadius: BorderRadius.circular(6),
@@ -843,7 +874,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFieldSection(String category, List<Map<String, dynamic>> fields) {
+  Widget _buildFieldSection(
+    String category,
+    List<Map<String, dynamic>> fields,
+  ) {
     final title = 'SÂN ${category.toUpperCase()} GỢI Ý';
     return Column(
       children: [
@@ -948,56 +982,59 @@ class _HomeScreenState extends State<HomeScreen> {
                 Positioned(
                   top: 8,
                   left: 8,
-                  child: Builder(builder: (context) {
-                    final courtId = field['id']?.toString() ?? '';
-                    final avg = _courtRatings[courtId];
-                    final count = _courtReviewCounts[courtId] ?? 0;
-                    final hasRating = avg != null && count > 0;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.star_rounded,
-                            color: Color(0xFFF59E0B),
-                            size: 12,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            hasRating
-                                ? avg.toStringAsFixed(1)
-                                : '—',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A1C1C),
-                            ),
-                          ),
-                          if (hasRating) ...[  const SizedBox(width: 3),
-                            Text(
-                              '($count)',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF64748B),
-                              ),
+                  child: Builder(
+                    builder: (context) {
+                      final courtId = field['id']?.toString() ?? '';
+                      final avg = _courtRatings[courtId];
+                      final count = _courtReviewCounts[courtId] ?? 0;
+                      final hasRating = avg != null && count > 0;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 4,
                             ),
                           ],
-                        ],
-                      ),
-                    );
-                  }),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.star_rounded,
+                              color: Color(0xFFF59E0B),
+                              size: 12,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              hasRating ? avg.toStringAsFixed(1) : '—',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1C1C),
+                              ),
+                            ),
+                            if (hasRating) ...[
+                              const SizedBox(width: 3),
+                              Text(
+                                '($count)',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -1052,37 +1089,39 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: Colors.grey,
                           ),
                           const SizedBox(width: 4),
-                          Builder(builder: (context) {
-                            final label = _calcDistanceLabel(
-                                field['facilityId'] as String?);
-                            if (label.isEmpty) {
-                              return _userPosition == null &&
-                                      (field['facilityId'] as String? ?? '')
-                                          .isNotEmpty
-                                  ? const SizedBox(
-                                      width: 10,
-                                      height: 10,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 1.5,
-                                        color: Colors.grey,
-                                      ),
-                                    )
-                                  : const Text(
-                                      '--',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey,
-                                      ),
-                                    );
-                            }
-                            return Text(
-                              label,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                              ),
-                            );
-                          }),
+                          Builder(
+                            builder: (context) {
+                              final facilityId =
+                                  field['facilityId']?.toString() ?? '';
+                              final label = _calcDistanceLabel(facilityId);
+                              if (label.isEmpty) {
+                                return _userPosition == null &&
+                                        facilityId.isNotEmpty
+                                    ? const SizedBox(
+                                        width: 10,
+                                        height: 10,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 1.5,
+                                          color: Colors.grey,
+                                        ),
+                                      )
+                                    : const Text(
+                                        '--',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey,
+                                        ),
+                                      );
+                              }
+                              return Text(
+                                label,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
                       Text(
@@ -1103,5 +1142,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
 }

@@ -50,12 +50,11 @@ import 'screens/payment_result_screen.dart';
 // Deep link
 import 'dart:async';
 import 'package:app_links/app_links.dart';
+import 'utils/route_arguments.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const SportsetApp());
 }
 
@@ -67,8 +66,7 @@ class SportsetApp extends StatefulWidget {
 }
 
 class _SportsetAppState extends State<SportsetApp> {
-  final GlobalKey<NavigatorState> _navigatorKey =
-      GlobalKey<NavigatorState>();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   late final AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSub;
 
@@ -76,7 +74,7 @@ class _SportsetAppState extends State<SportsetApp> {
   void initState() {
     super.initState();
     _appLinks = AppLinks();
-    _linkSub = _appLinks.uriLinkStream.listen(_handleDeepLink);
+    _linkSub = _appLinks.uriLinkStream.listen(_handleDeepLink, onError: (_) {});
   }
 
   void _handleDeepLink(Uri uri) {
@@ -93,8 +91,7 @@ class _SportsetAppState extends State<SportsetApp> {
       return;
     }
     // Firebase password reset App Link
-    if (uri.scheme == 'https' &&
-        uri.host == 'sportset-d345c.firebaseapp.com') {
+    if (uri.scheme == 'https' && uri.host == 'sportset-d345c.firebaseapp.com') {
       final mode = uri.queryParameters['mode'];
       final oobCode = uri.queryParameters['oobCode'];
       if (mode == 'resetPassword' && oobCode != null) {
@@ -133,30 +130,31 @@ class _SportsetAppState extends State<SportsetApp> {
       routes: {
         // Initial route - check if intro was completed
         '/': (context) => const SplashScreen(),
-        
+
         // Intro route
         '/intro': (context) => const IntroScreen(),
-        
+
         // Auth routes
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/forgot-password': (context) => const ForgotPasswordScreen(),
         '/otp-verification': (context) => const OtpVerificationScreen(),
         '/reset-password': (context) => const ResetPasswordScreen(),
-        '/reset-password-success': (context) => const ResetPasswordSuccessScreen(),
+        '/reset-password-success': (context) =>
+            const ResetPasswordSuccessScreen(),
         '/email-verification': (context) => const EmailVerificationScreen(),
         '/email-verified': (context) => const EmailVerifiedScreen(),
-        
+
         // Main app with bottom navigation
         '/main': (context) => const MainNavigationScreen(),
-        
+
         // Individual screens (accessible from main navigation)
         '/home': (context) => const HomeScreen(),
         '/explore': (context) => const ExploreScreen(),
         '/favorites': (context) => const FavoritesScreen(),
         '/booking-history': (context) => const BookingHistoryScreen(),
         '/profile': (context) => const ProfileScreen(),
-        
+
         // Field and booking flow
         '/venue-detail': (context) => const VenueDetailScreen(),
         '/field-detail': (context) => const FieldDetailScreen(),
@@ -164,19 +162,19 @@ class _SportsetAppState extends State<SportsetApp> {
         '/booking-confirmation': (context) => const BookingConfirmationScreen(),
         '/voucher-selection': (context) => const VoucherSelectionScreen(),
         '/booking-success': (context) => const BookingSuccessScreen(),
-        
+
         // Rating
         '/rating': (context) {
-          final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+          final args = routeArguments(context);
           return RatingScreen(
-            bookingId: args?['bookingId'] ?? '',
-            fieldId: args?['fieldId'] ?? '',
-            fieldName: args?['fieldName'] ?? '',
-            fieldImage: args?['fieldImage'] ?? '',
-            playDate: args?['playDate'] ?? '',
+            bookingId: args['bookingId']?.toString() ?? '',
+            fieldId: args['fieldId']?.toString() ?? '',
+            fieldName: args['fieldName']?.toString() ?? '',
+            fieldImage: args['fieldImage']?.toString() ?? '',
+            playDate: args['playDate']?.toString() ?? '',
           );
         },
-        
+
         // Profile sections
         '/edit-profile': (context) => const EditProfileScreen(),
         '/settings': (context) => const SettingsScreen(),
@@ -188,12 +186,11 @@ class _SportsetAppState extends State<SportsetApp> {
         // Payment
         '/payment': (context) => const PaymentScreen(),
         '/payment-result': (context) {
-          final args = ModalRoute.of(context)?.settings.arguments
-              as Map<String, dynamic>?;
+          final args = routeArguments(context);
           return PaymentResultScreen(
-            resultCode: args?['resultCode'] ?? '',
-            orderId: args?['orderId'] ?? '',
-            message: args?['message'] ?? '',
+            resultCode: args['resultCode']?.toString() ?? '',
+            orderId: args['orderId']?.toString() ?? '',
+            message: args['message']?.toString() ?? '',
           );
         },
       },
@@ -218,9 +215,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     super.didChangeDependencies();
     if (_didInitIndex) return;
     _didInitIndex = true;
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is Map && args['initialIndex'] is int) {
-      _currentIndex = args['initialIndex'] as int;
+    final args = routeArguments(context);
+    final requestedIndex = args['initialIndex'];
+    if (requestedIndex is int) {
+      _currentIndex = requestedIndex.clamp(0, _screens.length - 1).toInt();
     }
   }
 
@@ -252,9 +250,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 offset: const Offset(0, -4),
               ),
             ],
-            border: Border(
-              top: BorderSide(color: Colors.grey.shade100),
-            ),
+            border: Border(top: BorderSide(color: Colors.grey.shade100)),
           ),
           child: SafeArea(
             top: false,
@@ -290,9 +286,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         children: [
           Icon(
             icon,
-            color: isActive
-                ? const Color(0xFF4CAF50)
-                : const Color(0xFF9E9E9E),
+            color: isActive ? const Color(0xFF4CAF50) : const Color(0xFF9E9E9E),
             size: 24,
           ),
           const SizedBox(height: 4),
@@ -330,10 +324,10 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _checkIntroStatus() async {
     // Wait a moment to show splash
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     final prefs = await SharedPreferences.getInstance();
     final introCompleted = prefs.getBool('intro_completed') ?? false;
-    
+
     if (!mounted) return;
 
     if (!introCompleted) {
@@ -366,10 +360,7 @@ class _SplashScreenState extends State<SplashScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF4CAF50),
-                    Color(0xFF2E7D32),
-                  ],
+                  colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),

@@ -37,14 +37,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         final data = doc.data() ?? {};
         setState(() {
-          _displayName = data['fullName']?.toString() ??
-              user.displayName ??
-              'Người dùng';
+          _displayName =
+              data['fullName']?.toString() ?? user.displayName ?? 'Người dùng';
           _phoneNumber = data['phone']?.toString() ?? '';
           _email = data['email']?.toString() ?? user.email ?? '';
-          _photoUrl = data['photoUrl']?.toString() ??
-              user.photoURL ??
-              '';
+          _photoUrl = data['photoUrl']?.toString() ?? user.photoURL ?? '';
           _isLoading = false;
         });
       }
@@ -108,7 +105,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildMenuItem(
                     iconData: Icons.history_rounded,
                     title: 'Lịch sử đặt sân',
-                    onTap: () => Navigator.pushNamed(context, '/booking-history'),
+                    onTap: () =>
+                        Navigator.pushNamed(context, '/booking-history'),
                     showDivider: true,
                   ),
                   _buildMenuItem(
@@ -143,7 +141,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildMenuItem(
                     iconData: Icons.gavel_outlined,
                     title: 'Điều khoản & Chính sách',
-                    onTap: () => Navigator.pushNamed(context, '/privacy-policy'),
+                    onTap: () =>
+                        Navigator.pushNamed(context, '/privacy-policy'),
                     showDivider: true,
                   ),
                   _buildMenuItem(
@@ -166,7 +165,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.logout_rounded, color: Color(0xFFBA1A1A), size: 20),
+                        Icon(
+                          Icons.logout_rounded,
+                          color: Color(0xFFBA1A1A),
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           'Đăng xuất',
@@ -244,15 +247,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       )
                     : (_photoUrl.isNotEmpty
-                        ? Image.network(
-                            _photoUrl,
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _buildInitialsAvatar(initials),
-                          )
-                        : _buildInitialsAvatar(initials)),
+                          ? Image.network(
+                              _photoUrl,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  _buildInitialsAvatar(initials),
+                            )
+                          : _buildInitialsAvatar(initials)),
               ),
             ),
             Positioned(
@@ -266,7 +269,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: const Icon(Icons.verified, size: 13, color: Colors.white),
+                child: const Icon(
+                  Icons.verified,
+                  size: 13,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
@@ -370,9 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: showDivider
             ? const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFF8F8F8)),
-                ),
+                border: Border(bottom: BorderSide(color: Color(0xFFF8F8F8))),
               )
             : null,
         child: Row(

@@ -40,14 +40,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           .collection('customers')
           .doc(user.uid)
           .get();
+      if (!mounted) return;
       final data = doc.data() ?? {};
       setState(() {
-        _nameController.text = data['fullName']?.toString() ?? user.displayName ?? '';
-        _phoneController.text = data['phone']?.toString() ?? user.phoneNumber ?? '';
+        _nameController.text =
+            data['fullName']?.toString() ?? user.displayName ?? '';
+        _phoneController.text =
+            data['phone']?.toString() ?? user.phoneNumber ?? '';
         _emailController.text = data['email']?.toString() ?? user.email ?? '';
         _photoUrl = data['photoUrl']?.toString() ?? user.photoURL ?? '';
         final genderVal = data['gender']?.toString() ?? 'male';
-        _selectedGender = ['male', 'female', 'other'].contains(genderVal) ? genderVal : 'male';
+        _selectedGender = ['male', 'female', 'other'].contains(genderVal)
+            ? genderVal
+            : 'male';
         final dobStr = data['dob']?.toString() ?? '';
         if (dobStr.isNotEmpty) {
           try {
@@ -70,8 +75,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickAvatar() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (picked == null) return;
+    if (!mounted) return;
     setState(() => _pickedImage = File(picked.path));
   }
 
@@ -102,7 +111,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'dob': dobStr,
         if (newPhotoUrl != null) 'photoUrl': newPhotoUrl,
       };
-      await FirebaseFirestore.instance.collection('customers').doc(user.uid).update(updates);
+      await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .update(updates);
       if (newPhotoUrl != null) {
         await user.updatePhotoURL(newPhotoUrl);
         await user.updateDisplayName(_nameController.text.trim());
@@ -121,7 +133,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: $e'), backgroundColor: const Color(0xFFBA1A1A)),
+          SnackBar(
+            content: Text('Lỗi: $e'),
+            backgroundColor: const Color(0xFFBA1A1A),
+          ),
         );
       }
     } finally {
@@ -159,7 +174,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _buildAppBar(),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF4CAF50),
+                        ),
+                      )
                     : ListView(
                         padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
                         children: [
@@ -174,7 +193,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           _buildTextField(
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
-                            prefixIcon: const Icon(Icons.call, size: 20, color: Color(0xFF9E9E9E)),
+                            prefixIcon: const Icon(
+                              Icons.call,
+                              size: 20,
+                              color: Color(0xFF9E9E9E),
+                            ),
                           ),
                           const SizedBox(height: 20),
                           _buildLabel('Email'),
@@ -182,7 +205,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           _buildTextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            prefixIcon: const Icon(Icons.mail, size: 20, color: Color(0xFF9E9E9E)),
+                            prefixIcon: const Icon(
+                              Icons.mail,
+                              size: 20,
+                              color: Color(0xFF9E9E9E),
+                            ),
                           ),
                           const SizedBox(height: 20),
                           Row(
@@ -254,9 +281,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: _pickedImage != null
                   ? Image.file(_pickedImage!, fit: BoxFit.cover)
                   : (_photoUrl.isNotEmpty
-                      ? Image.network(_photoUrl, fit: BoxFit.cover,
-                          errorBuilder: (_, e, s) => _avatarFallback())
-                      : _avatarFallback()),
+                        ? Image.network(
+                            _photoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, e, s) => _avatarFallback(),
+                          )
+                        : _avatarFallback()),
             ),
           ),
           Positioned(
@@ -283,7 +313,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.photo_camera, color: Colors.white, size: 18),
+                child: const Icon(
+                  Icons.photo_camera,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
             ),
           ),
@@ -393,7 +427,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: DropdownButtonFormField<String>(
             initialValue: _selectedGender,
             decoration: const InputDecoration(
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
               border: InputBorder.none,
               focusedBorder: InputBorder.none,
               enabledBorder: InputBorder.none,
@@ -411,7 +448,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               DropdownMenuItem(value: 'female', child: Text('Nữ')),
               DropdownMenuItem(value: 'other', child: Text('Khác')),
             ],
-            onChanged: (val) => setState(() => _selectedGender = val!),
+            onChanged: (val) {
+              if (val != null) {
+                setState(() => _selectedGender = val);
+              }
+            },
           ),
         ),
       ],
@@ -438,9 +479,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     onPrimary: Colors.white,
                   ),
                 ),
-                child: child!,
+                child: child ?? const SizedBox.shrink(),
               ),
             );
+            if (!mounted) return;
             if (picked != null) setState(() => _selectedDate = picked);
           },
           child: Container(
@@ -470,7 +512,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         : const Color(0xFF1A1C1C),
                   ),
                 ),
-                const Icon(Icons.calendar_month, size: 20, color: Color(0xFF9E9E9E)),
+                const Icon(
+                  Icons.calendar_month,
+                  size: 20,
+                  color: Color(0xFF9E9E9E),
+                ),
               ],
             ),
           ),
@@ -503,13 +549,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
           child: _isSaving
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
                 )
               : const Text(
                   'Lưu thay đổi',

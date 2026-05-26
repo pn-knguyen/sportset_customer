@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class ResetPasswordSuccessScreen extends StatelessWidget {
   const ResetPasswordSuccessScreen({super.key});
@@ -57,11 +57,7 @@ class ResetPasswordSuccessScreen extends StatelessWidget {
               ),
             ],
           ),
-          child: const Icon(
-            Icons.check,
-            color: Colors.white,
-            size: 44,
-          ),
+          child: const Icon(Icons.check, color: Colors.white, size: 44),
         ),
         const SizedBox(height: 10),
         const Text(

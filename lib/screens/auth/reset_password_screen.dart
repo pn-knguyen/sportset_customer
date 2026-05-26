@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../utils/route_arguments.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -24,9 +25,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is Map<String, dynamic>) {
-      _email = args['email'] as String?;
-      _oobCode = args['oobCode'] as String?;
+    final mapArgs = stringKeyedMap(args);
+    if (mapArgs != null) {
+      _email = mapArgs['email']?.toString();
+      _oobCode = mapArgs['oobCode']?.toString();
     } else if (args is String) {
       _email = args;
     }
@@ -59,22 +61,26 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await FirebaseAuth.instance
-          .confirmPasswordReset(code: _oobCode!, newPassword: newPassword);
+      await FirebaseAuth.instance.confirmPasswordReset(
+        code: _oobCode!,
+        newPassword: newPassword,
+      );
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/reset-password-success');
     } on FirebaseAuthException catch (e) {
       final msg = e.code == 'expired-action-code'
           ? 'Liên kết đặt lại đã hết hạn. Vui lòng yêu cầu lại từ đầu.'
           : e.code == 'invalid-action-code'
-              ? 'Liên kết không hợp lệ. Vui lòng yêu cầu lại.'
-              : e.message ?? 'Đặt lại mật khẩu thất bại.';
+          ? 'Liên kết không hợp lệ. Vui lòng yêu cầu lại.'
+          : e.message ?? 'Đặt lại mật khẩu thất bại.';
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(msg),
-        backgroundColor: const Color(0xFFF44336),
-        behavior: SnackBarBehavior.floating,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFFF44336),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -148,11 +154,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           shaderCallback: (bounds) => const LinearGradient(
             colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
           ).createShader(bounds),
-          child: const Icon(
-            Icons.sports_soccer,
-            size: 80,
-            color: Colors.white,
-          ),
+          child: const Icon(Icons.sports_soccer, size: 80, color: Colors.white),
         ),
         const SizedBox(height: 10),
         const Text(
@@ -185,11 +187,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         Text(
           'Vui lòng thiết lập mật khẩu mới',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Color(0xFF64748B),
-            fontSize: 16,
-            height: 1.5,
-          ),
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 16, height: 1.5),
         ),
       ],
     );
@@ -245,8 +243,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.info_outline_rounded,
-                  color: Color(0xFF4CAF50), size: 20),
+              Icon(
+                Icons.info_outline_rounded,
+                color: Color(0xFF4CAF50),
+                size: 20,
+              ),
               SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -264,7 +265,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         const SizedBox(height: 32),
         GestureDetector(
           onTap: () => Navigator.pushNamedAndRemoveUntil(
-              context, '/login', (route) => false),
+            context,
+            '/login',
+            (route) => false,
+          ),
           child: const Text(
             'Quay lại đăng nhập',
             style: TextStyle(
@@ -298,7 +302,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           isVisible: _isConfirmPasswordVisible,
           errorText: _confirmPasswordError,
           onToggle: () => setState(
-              () => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+            () => _isConfirmPasswordVisible = !_isConfirmPasswordVisible,
+          ),
         ),
         const SizedBox(height: 20),
         Container(
@@ -408,10 +413,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 onPressed: onToggle,
               ),
             ),
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 16,
-            ),
+            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 16),
           ),
         ),
         if (errorText != null)
@@ -419,10 +421,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             padding: const EdgeInsets.only(left: 16, top: 4),
             child: Text(
               errorText,
-              style: const TextStyle(
-                color: Color(0xFFF44336),
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Color(0xFFF44336), fontSize: 12),
             ),
           ),
       ],
@@ -440,7 +439,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         const SizedBox(width: 4),
         GestureDetector(
           onTap: () => Navigator.pushNamedAndRemoveUntil(
-              context, '/login', (route) => false),
+            context,
+            '/login',
+            (route) => false,
+          ),
           child: const Text(
             'Đăng nhập',
             style: TextStyle(

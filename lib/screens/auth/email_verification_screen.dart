@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -54,6 +54,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     setState(() => _isSending = true);
     try {
       await FirebaseAuth.instance.currentUser?.sendEmailVerification();
+      if (!mounted) return;
       _startCountdown();
       setState(() {
         _resent = true;
@@ -64,8 +65,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
         if (mounted) setState(() => _showSuccessBanner = false);
       });
     } catch (_) {
-      setState(() => _isSending = false);
       if (mounted) {
+        setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Gửi lại thất bại. Vui lòng thử lại.'),
@@ -146,8 +147,14 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
               right: 0,
               child: SafeArea(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF4CAF50),
                     borderRadius: BorderRadius.circular(12),
@@ -161,8 +168,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.white, size: 20),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -222,7 +232,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 300),
                             child: Text(
-                              _resent ? 'Đã gửi lại thư!' : 'Đăng ký thành công!',
+                              _resent
+                                  ? 'Đã gửi lại thư!'
+                                  : 'Đăng ký thành công!',
                               key: ValueKey(_resent),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
@@ -259,12 +271,17 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                                  colors: [
+                                    Color(0xFF4CAF50),
+                                    Color(0xFF2E7D32),
+                                  ],
                                 ),
                                 borderRadius: BorderRadius.circular(28),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF4CAF50).withValues(alpha: 0.35),
+                                    color: const Color(
+                                      0xFF4CAF50,
+                                    ).withValues(alpha: 0.35),
                                     blurRadius: 16,
                                     offset: const Offset(0, 6),
                                   ),
@@ -272,8 +289,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                               ),
                               child: ElevatedButton.icon(
                                 onPressed: _openEmailApp,
-                                icon: const Icon(Icons.open_in_new_rounded,
-                                    color: Colors.white, size: 20),
+                                icon: const Icon(
+                                  Icons.open_in_new_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 label: const Text(
                                   'Mở ứng dụng Email',
                                   style: TextStyle(
@@ -445,12 +465,17 @@ class _EnvelopeLinesPainter extends CustomPainter {
 
     // Side diagonal lines
     canvas.drawLine(
-        Offset(0, size.height), Offset(size.width * 0.4, size.height * 0.45), paint);
+      Offset(0, size.height),
+      Offset(size.width * 0.4, size.height * 0.45),
+      paint,
+    );
     canvas.drawLine(
-        Offset(size.width, size.height), Offset(size.width * 0.6, size.height * 0.45), paint);
+      Offset(size.width, size.height),
+      Offset(size.width * 0.6, size.height * 0.45),
+      paint,
+    );
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

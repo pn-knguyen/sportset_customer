@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../utils/route_arguments.dart';
+import '../../utils/safe_values.dart';
 
 class VoucherSelectionScreen extends StatefulWidget {
   const VoucherSelectionScreen({super.key});
@@ -28,9 +30,8 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
     }
     _didInitArgs = true;
 
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    if (args == null) {
+    final args = routeArguments(context);
+    if (args.isEmpty) {
       return;
     }
 
@@ -144,8 +145,9 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
   }
 
   int _computeDiscountAmount(Map<String, dynamic> voucher, int orderValue) {
-    final discountType = voucher['discountType']?.toString().toLowerCase() ?? '';
-    final discountValue = (voucher['discountValue'] as num?)?.toDouble() ?? 0;
+    final discountType =
+        voucher['discountType']?.toString().toLowerCase() ?? '';
+    final discountValue = toNullableDouble(voucher['discountValue']) ?? 0;
 
     if (discountType == 'percent') {
       final amount = (orderValue * discountValue / 100).round();
@@ -179,15 +181,18 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
   }
 
   String _discountLabel(Map<String, dynamic> voucher) {
-    final discountType = voucher['discountType']?.toString().toLowerCase() ?? '';
-    final value = (voucher['discountValue'] as num?)?.toDouble() ?? 0;
+    final discountType =
+        voucher['discountType']?.toString().toLowerCase() ?? '';
+    final value = toNullableDouble(voucher['discountValue']) ?? 0;
     if (discountType == 'percent') {
       return 'Giảm ${value.toStringAsFixed(value % 1 == 0 ? 0 : 1)}%';
     }
     return 'Giảm ${_formatCurrency(value.round())}';
   }
 
-  List<Map<String, dynamic>> _filterVouchers(List<Map<String, dynamic>> vouchers) {
+  List<Map<String, dynamic>> _filterVouchers(
+    List<Map<String, dynamic>> vouchers,
+  ) {
     final now = DateTime.now();
     final query = _voucherCodeController.text.trim().toLowerCase();
 
@@ -304,7 +309,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
       'code': selected['code']?.toString() ?? '',
       'title': selected['title']?.toString() ?? '',
       'discountType': selected['discountType']?.toString() ?? 'fixed',
-      'discountValue': (selected['discountValue'] as num?)?.toDouble() ?? 0,
+      'discountValue': toNullableDouble(selected['discountValue']) ?? 0,
       'minOrderValue': _toInt(selected['minOrderValue']),
       'facilityId': selected['facilityId']?.toString() ?? '',
       'facilityName': selected['facilityName']?.toString() ?? '',
@@ -346,10 +351,12 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                     }
 
                     final vouchers = (snapshot.data?.docs ?? [])
-                        .map((doc) => <String, dynamic>{
-                              'id': doc.id,
-                              ...doc.data(),
-                            })
+                        .map(
+                          (doc) => <String, dynamic>{
+                            'id': doc.id,
+                            ...doc.data(),
+                          },
+                        )
                         .toList();
                     final filtered = _filterVouchers(vouchers);
 
@@ -387,10 +394,9 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 final vouchers = (snapshot.data?.docs ?? [])
-                    .map((doc) => <String, dynamic>{
-                          'id': doc.id,
-                          ...doc.data(),
-                        })
+                    .map(
+                      (doc) => <String, dynamic>{'id': doc.id, ...doc.data()},
+                    )
                     .toList();
                 return _buildBottomBar(vouchers);
               },
@@ -431,10 +437,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                 ],
               ),
               child: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back,
-                  color: Color(0xFF1A1C1C),
-                ),
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1C1C)),
                 padding: EdgeInsets.zero,
                 onPressed: () => Navigator.pop(context),
               ),
@@ -478,14 +481,20 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
               controller: _voucherCodeController,
               decoration: InputDecoration(
                 hintText: 'Nhập mã giảm giá...',
-                hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF6F7A6B)),
+                hintStyle: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF6F7A6B),
+                ),
                 border: InputBorder.none,
                 prefixIcon: const Icon(
                   Icons.confirmation_number_outlined,
                   color: Color(0xFF6F7A6B),
                   size: 20,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
               ),
               onChanged: (_) => setState(() {}),
             ),
@@ -496,7 +505,10 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
               borderRadius: BorderRadius.circular(22),
               onTap: () => _applyCodeFromInput(vouchers),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF4CAF50),
                   borderRadius: BorderRadius.circular(22),
@@ -533,7 +545,9 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF4CAF50) : const Color(0xFFE8E8E8),
+                color: isSelected
+                    ? const Color(0xFF4CAF50)
+                    : const Color(0xFFE8E8E8),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -733,7 +747,9 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
                       right: 10,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF6F7A6B),
                           borderRadius: BorderRadius.circular(12),
@@ -777,12 +793,7 @@ class _VoucherSelectionScreenState extends State<VoucherSelectionScreen> {
 
   Widget _buildBottomBar(List<Map<String, dynamic>> vouchers) {
     return Container(
-      padding: const EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 16,
-        bottom: 32,
-      ),
+      padding: const EdgeInsets.only(left: 24, right: 24, top: 16, bottom: 32),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.92),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
